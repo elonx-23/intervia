@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1e3a8a" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <!-- Ces trois balises sont ce qui fait qu'une fois ajoutée à l'écran
+         d'accueil sur iPhone, l'app s'ouvre plein écran sans barre Safari,
+         avec une barre de statut qui se fond dans l'en-tête bleu plutôt
+         qu'une bande blanche disjointe — sans elles iOS ignore parfois le
+         "display: standalone" du manifest et garde le chrome du navigateur. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Intervia" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Intervia</title>
+    <!-- Inter : alternative libre la plus proche de SF Pro (police d'Apple,
+         non redistribuable hors appareils Apple). Sur iPhone/Mac réel,
+         -apple-system prend le dessus automatiquement (voir index.css) et
+         affiche la vraie police système.
+         Poppins : réservée au nom des entreprises dans le sélecteur d'équipe
+         (voir .font-brand dans index.css) — géométrique et ronde, plus
+         chaleureuse et actuelle qu'Inter, pour que le nom de la société se
+         distingue visuellement du reste de l'interface. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

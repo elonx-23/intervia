@@ -1,0 +1,453 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 1.15rem;
+  --background: oklch(0.965 0.012 258);
+  --foreground: oklch(0.18 0.02 260);
+  --card: oklch(0.995 0.004 258);
+  --card-foreground: oklch(0.18 0.02 260);
+  --popover: oklch(0.995 0.004 258);
+  --popover-foreground: oklch(0.18 0.02 260);
+  --primary: oklch(0.58 0.19 259);
+  --primary-foreground: oklch(0.99 0.005 255);
+  --secondary: oklch(0.93 0.016 259);
+  --secondary-foreground: oklch(0.28 0.03 260);
+  --muted: oklch(0.93 0.016 259);
+  --muted-foreground: oklch(0.42 0.025 260);
+  --accent: oklch(0.9 0.05 259);
+  --accent-foreground: oklch(0.3 0.1 259);
+  --destructive: oklch(0.58 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.55 0.15 149);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.6 0.15 75);
+  --warning-foreground: oklch(0.99 0 0);
+  --border: oklch(0.82 0.02 259);
+  --input: oklch(0.82 0.02 259);
+  --ring: oklch(0.58 0.19 259 / 50%);
+
+  /* Le "verre" translucide (header, bottom-nav, cartes, menus déroulants) :
+     un blanc pur translucide posé sur un fond quasi blanc (--background,
+     --card) se fond avec tout ce qu'il y a derrière — c'est le "ton sur
+     ton" qui rendait le mode clair plat, et qui privait spécifiquement les
+     menus déroulants (Select, DropdownMenu — en portail, donc souvent posés
+     sur une carte blanche) de toute silhouette alors que le mode sombre,
+     où le même verre se détache naturellement sur un fond foncé, n'avait
+     jamais ce problème. Le fond du verre porte maintenant une légère teinte
+     bleue (au lieu de blanc pur) et le bord/l'ombre gagnent en opacité et en
+     teinte — même logique que le bord sombre à 45% du mode sombre, adaptée
+     en clair pour rester lisible sans devenir un simple filet gris. */
+  --glass-bg: oklch(0.95 0.025 259 / 58%);
+  --glass-bg-strong: oklch(0.97 0.022 259 / 80%);
+  --glass-border: oklch(0.45 0.08 260 / 16%);
+  --glass-highlight: oklch(1 0 0 / 90%);
+  --glass-edge: oklch(0.3 0.09 260 / 22%);
+  /* Ombre portée douce et teintée (pas noire) sous les panneaux de verre —
+     absente en sombre (où l'obscurité ambiante suffit déjà à faire flotter
+     le panneau), c'est ce qui donne aux menus déroulants et bulles leur
+     effet "soulevé au-dessus de la page" en clair plutôt qu'un simple
+     rectangle blanc posé à plat. */
+  --glass-ambient-shadow: 0 20px 44px -18px oklch(0.4 0.16 259 / 24%);
+
+  /* Fait rendre les contrôles natifs (icône/calendrier de <input type="date">,
+     scrollbars…) dans le bon jeu de couleurs — sans ça, sur fond sombre,
+     l'icône calendrier native reste claire et jure à côté des Select de
+     l'appli, on dirait un élément étranger mal aligné plutôt qu'un champ
+     assorti au reste du formulaire. */
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.16 0.014 260);
+  --foreground: oklch(0.97 0.006 260);
+  --card: oklch(0.21 0.016 260);
+  --card-foreground: oklch(0.97 0.006 260);
+  --popover: oklch(0.21 0.016 260);
+  --popover-foreground: oklch(0.97 0.006 260);
+  --primary: oklch(0.68 0.17 259);
+  --primary-foreground: oklch(0.14 0.02 260);
+  --secondary: oklch(0.28 0.016 260);
+  --secondary-foreground: oklch(0.97 0.006 260);
+  --muted: oklch(0.28 0.016 260);
+  --muted-foreground: oklch(0.68 0.015 260);
+  --accent: oklch(0.32 0.05 259);
+  --accent-foreground: oklch(0.9 0.03 259);
+  --destructive: oklch(0.7 0.19 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.72 0.16 149);
+  --success-foreground: oklch(0.14 0.02 260);
+  --warning: oklch(0.8 0.14 75);
+  --warning-foreground: oklch(0.2 0.04 75);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.68 0.17 259 / 50%);
+
+  --glass-bg: oklch(0.22 0.02 260 / 38%);
+  --glass-bg-strong: oklch(0.19 0.02 260 / 58%);
+  --glass-border: oklch(1 0 0 / 12%);
+  --glass-highlight: oklch(1 0 0 / 10%);
+  --glass-edge: oklch(0 0 0 / 45%);
+  /* Déjà efficace sans ombre ajoutée : l'obscurité ambiante fait flotter le
+     verre naturellement — voir le commentaire sur --glass-ambient-shadow
+     dans :root. */
+  --glass-ambient-shadow: 0 0 #0000;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 8px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 6px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    /* color-scheme réglé sur :root/.dark (hors @layer, donc prioritaire) —
+       suit le thème choisi dans l'app plutôt que la préférence système,
+       sinon les contrôles natifs (date picker…) peuvent rendre dans l'autre
+       jeu de couleurs que le reste de l'interface. */
+    /* Empêche le flash gris/bleu au toucher et le menu contextuel iOS
+       (copier/enregistrer) au appui long — sans ça, chaque tap trahit
+       "c'est un site web" plutôt qu'une vraie app. */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    overscroll-behavior: none;
+    /* iOS/WebKit traite différemment une page dont le contenu dépasse la
+       hauteur d'écran (défilable) d'une page qui tient entièrement dedans —
+       ça inclut le calcul de position des éléments fixes + zone sécurisée,
+       qui peut différer entre les deux (symptôme observé : la barre du bas
+       bouge selon la quantité de contenu de la page, ex. Devis vs Facture).
+       En forçant TOUJOURS un contexte de défilement, même quand le contenu
+       est court, toutes les pages sont traitées de façon identique. */
+    overflow-y: scroll;
+    min-height: 100.1dvh;
+  }
+  body {
+    @apply text-foreground overscroll-none;
+    background: transparent;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', system-ui, sans-serif;
+    overscroll-behavior: none;
+    /* Ancre le débordement de rebond iOS à la couleur de fond de l'app au
+       lieu du blanc/noir par défaut du système quand on tire trop en haut
+       ou en bas de l'écran. */
+    background-color: var(--background);
+    min-height: 100.1dvh;
+  }
+  button,
+  a,
+  [role='button'] {
+    /* Retire le double-tap-pour-zoomer et le délai de ~300ms sur les
+       éléments interactifs — comportement natif, pas web mobile. */
+    touch-action: manipulation;
+  }
+  /* Aligne l'icône calendrier native de <input type="date"> sur la taille et
+     l'opacité de l'icône chevron des Select — même hauteur de champ déjà
+     assurée par la classe h-11 commune, mais l'icône native est sinon plus
+     grosse et collée au bord, ce qui casse la cohérence visuelle. */
+  input[type='date']::-webkit-calendar-picker-indicator {
+    margin-left: 0.25rem;
+    padding: 0;
+    opacity: 0.65;
+    width: 1rem;
+    height: 1rem;
+  }
+  /* <input type="date"> essaie de se dessiner à la taille de son contenu
+     interne (jj/mm/aaaa + icône), qui peut dépasser un "width: 100%" sur
+     WebKit mobile — d'où la bulle visuellement trop grosse à côté d'un
+     autre champ (Du/Au, TVA/Valide jusqu'au), même hors saisie. width/
+     min-width ne suffisent pas à la contraindre (ce sont des planchers, pas
+     des plafonds, pour un contrôle natif) : seul un max-width en unité
+     absolue fixe un vrai plafond que le rendu ne peut jamais dépasser,
+     quelle que soit la place que le contrôle voudrait prendre. La police
+     reste à 16px : en dessous, iOS Safari zoome toute la page au focus. */
+  input[type='date'] {
+    min-width: 0;
+    width: 100%;
+    max-width: 7.5rem;
+    font-size: 16px;
+    padding-inline: 0.375rem;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+}
+
+@layer components {
+  /* Réservée au NOM D'ENTREPRISE dans le sélecteur d'équipe (jamais au
+     reste de l'UI) — géométrique et ronde plutôt qu'Inter, pour que la
+     marque de la société se distingue visuellement du chrome de
+     l'application, un peu comme une enseigne plutôt qu'un libellé de
+     formulaire. */
+  .font-brand {
+    font-family: 'Poppins', ui-rounded, system-ui, sans-serif;
+  }
+
+  /* Fond sobre façon iOS (type "Réglages"/"Fichiers") : pas un fond coloré
+     façon wallpaper — les taches multicolores précédentes ont été jugées
+     pas assez sobres/pro pour une app de gestion. Le "verre" doit surtout
+     montrer le contenu (cartes, texte) qui défile derrière les barres, pas
+     un arrière-plan décoratif. Le dégradé porte cela dit un peu plus de
+     lumière/teinte qu'avant (0.006 → 0.02 de chroma, écart de clarté plus
+     marqué du haut au bas) : trop plat, il se confondait avec les cartes
+     blanches posées dessus et donnait l'impression d'une seule page grise
+     uniforme plutôt que de contenu qui flotte au-dessus d'un arrière-plan. */
+  .app-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(180deg, oklch(0.97 0.014 258), oklch(0.93 0.02 259) 55%, oklch(0.87 0.028 261));
+  }
+  .dark .app-backdrop {
+    background: linear-gradient(180deg, oklch(0.2 0.014 260), oklch(0.15 0.014 260) 55%, oklch(0.11 0.012 260));
+  }
+
+  /* Matériau "Liquid Glass" (raffinement iOS 27) : bord assombri pour la
+     profondeur, reflet spéculaire clair en haut, forte diffusion du contenu
+     derrière (blur + saturate élevés) pour rester lisible. Le dégradé
+     radial (dôme clair en haut-gauche, ombre douce en bas-droite) donne
+     l'impression de courbure même quand le contenu derrière est trop lisse
+     pour que la déformation se voie — garanti visible sur tous les
+     navigateurs, ne dépend pas de backdrop-filter. */
+  .glass {
+    --elevation-shadow: 0 0 #0000;
+    background-color: var(--glass-bg);
+    background-image: radial-gradient(130% 130% at 10% -20%, oklch(1 0 0 / 90%), transparent 45%);
+    backdrop-filter: blur(40px) saturate(220%) brightness(1.08) contrast(0.96);
+    -webkit-backdrop-filter: blur(40px) saturate(220%) brightness(1.08) contrast(0.96);
+    border: 1px solid var(--glass-border);
+    /* Combiné dans UNE seule déclaration (highlight + bord + élévation) :
+       si l'élévation venait d'une classe utilitaire Tailwind séparée
+       (shadow-*) sur le même élément, la couche "utilities" de Tailwind
+       écrase entièrement ce box-shadow ici (bug vécu — vérifié en
+       inspectant le style calculé : tout ressortait à zéro). En passant
+       l'élévation par --elevation-shadow (fixée en style inline par le
+       composant), tout reste dans une seule déclaration qui ne peut plus
+       se faire écraser. */
+    box-shadow:
+      inset 0 1.5px 0 0 var(--glass-highlight),
+      inset 0 0 0 1px var(--glass-edge),
+      var(--glass-ambient-shadow),
+      var(--elevation-shadow);
+  }
+  .glass-strong {
+    --elevation-shadow: 0 0 #0000;
+    background-color: var(--glass-bg-strong);
+    background-image: radial-gradient(130% 130% at 10% -20%, oklch(1 0 0 / 95%), transparent 45%);
+    backdrop-filter: blur(50px) saturate(220%) brightness(1.08) contrast(0.96);
+    -webkit-backdrop-filter: blur(50px) saturate(220%) brightness(1.08) contrast(0.96);
+    border: 1px solid var(--glass-border);
+    box-shadow:
+      inset 0 1.5px 0 0 var(--glass-highlight),
+      inset 0 0 0 1px var(--glass-edge),
+      var(--glass-ambient-shadow),
+      var(--elevation-shadow);
+  }
+  .dark .glass {
+    background-image: radial-gradient(130% 130% at 10% -20%, oklch(1 0 0 / 22%), transparent 45%);
+  }
+  .dark .glass-strong {
+    background-image: radial-gradient(130% 130% at 10% -20%, oklch(1 0 0 / 25%), transparent 45%);
+  }
+
+  /* Barre de navigation du bas : un peu plus transparente que le verre
+     "fort" standard, pour mieux laisser deviner le contenu qui défile
+     derrière — même matériau, juste un fond moins opaque. */
+  .bottom-nav-glass {
+    background-color: oklch(0.97 0.025 259 / 40%);
+  }
+  .dark .bottom-nav-glass {
+    background-color: oklch(0.19 0.02 260 / 30%);
+  }
+
+  /* Vraie déformation optique (pas juste flou+teinte) sur Chrome/Chromium —
+     voir LiquidGlassDefs.tsx. `.lens-capable` est ajouté en JS seulement si
+     le navigateur est Chromium ; sur Safari .glass garde son flou normal
+     ci-dessus, sans rien de cassé. */
+  /* Le flou doit rester LÉGER ici — un gros flou appliqué après la
+     déformation (l'ordre dans la liste de filtres compte) lisse quasiment
+     toute la courbure de la lentille et ne laisse plus qu'un flou terne.
+     La netteté de la matière derrière vient de la lentille elle-même, pas
+     d'un flou fort. */
+  .lens-capable .glass {
+    backdrop-filter: url(#liquid-glass-lens) blur(6px) saturate(220%) brightness(1.1) contrast(1.02);
+  }
+  .lens-capable .glass-strong {
+    backdrop-filter: url(#liquid-glass-lens-strong) blur(8px) saturate(220%) brightness(1.1) contrast(1.02);
+  }
+  .lens-capable .glass-lens {
+    backdrop-filter: url(#liquid-glass-lens) blur(5px) saturate(200%) brightness(1.1) contrast(1.02);
+  }
+  /* Au toucher, la lentille se creuse davantage — cohérent avec la
+     compression physique de .liquid-pressed sur le même élément. */
+  .lens-capable .glass-lens.liquid-pressed {
+    backdrop-filter: url(#liquid-glass-lens-strong) blur(4px) saturate(210%) brightness(1.12) contrast(1.03);
+  }
+
+}
+
+/* Matériau "verre liquide" interactif — piloté en temps réel par la position
+   du doigt (variables --touch-x/--touch-y écrites en JS à chaque
+   pointermove, voir useLiquidTouch.ts), pas une animation préenregistrée.
+   Vraie déformation locale + reflet qui suit le doigt + onde au point de
+   contact + retour élastique. La réfraction pixel du contenu SOUS le bouton
+   (comme une vraie lentille optique) n'est pas faisable de façon fiable sur
+   Safari (backdrop-filter + SVG displacement cassé — bugs.webkit.org
+   #245510) ; ceci est l'approximation la plus proche jouable partout, y
+   compris iPhone, en gardant tout le reste réellement piloté par le geste. */
+@layer components {
+  .liquid {
+    position: relative;
+    overflow: hidden;
+    transform-origin: var(--touch-x, 50%) var(--touch-y, 50%);
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .liquid::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle 65% at var(--touch-x, 50%) var(--touch-y, 50%), oklch(1 0 0 / 60%), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+  }
+  .dark .liquid::before {
+    background: radial-gradient(circle 65% at var(--touch-x, 50%) var(--touch-y, 50%), oklch(1 0 0 / 28%), transparent 70%);
+  }
+
+  .liquid::after {
+    content: '';
+    position: absolute;
+    left: var(--ripple-x, 50%);
+    top: var(--ripple-y, 50%);
+    width: 14px;
+    height: 14px;
+    margin: -7px;
+    border-radius: 9999px;
+    background: radial-gradient(circle, oklch(1 0 0 / 50%), transparent 72%);
+    pointer-events: none;
+    opacity: 0;
+  }
+  .liquid.liquid-ripple::after {
+    animation: liquid-ripple-expand 0.65s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  /* Pression : le matériau se compresse depuis le point exact du toucher
+     (transform-origin suit --touch-x/--touch-y), le reflet apparaît. */
+  .liquid.liquid-pressed {
+    transform: scale(0.93);
+    transition: transform 0.1s cubic-bezier(0.2, 0, 0.4, 1);
+  }
+  .liquid.liquid-pressed::before {
+    opacity: 1;
+    transition: opacity 0.08s ease;
+  }
+
+  /* Relâchement : retour élastique avec une légère oscillation, pas un
+     simple retour linéaire — sensation de matière souple. */
+  .liquid.liquid-release {
+    animation: liquid-spring-back 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+}
+
+@keyframes liquid-ripple-expand {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.65;
+  }
+  100% {
+    transform: scale(16);
+    opacity: 0;
+  }
+}
+
+@keyframes liquid-spring-back {
+  0% {
+    transform: scale(0.93);
+  }
+  55% {
+    transform: scale(1.018);
+  }
+  80% {
+    transform: scale(0.994);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Étirement liquide de la pastille de navigation pendant son trajet d'un
+   onglet à l'autre — s'allonge dans le sens du mouvement puis se recompose,
+   comme une goutte qui glisse. Tourne en parallèle de la transition CSS
+   left/width (positions), rejouée en JS à chaque changement d'onglet. */
+@keyframes liquid-blob-morph {
+  0% {
+    transform: scaleX(1);
+  }
+  35% {
+    transform: scaleX(1.45);
+  }
+  70% {
+    transform: scaleX(0.9);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+.liquid-blob-morph {
+  animation: liquid-blob-morph 0.5s cubic-bezier(0.34, 1.1, 0.4, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .liquid-blob-morph {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid,
+  .liquid.liquid-pressed,
+  .liquid.liquid-release,
+  .liquid.liquid-ripple::after {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}
+
+/* Pas de transition de page façon View Transitions API : essayé en glissement
+   (donnait le vertige) puis en fondu (provoquait un flash noir — le fond de
+   la page est transparent par design pour laisser voir .app-backdrop, et les
+   instantanés avant/après de la View Transitions API ne composent pas bien
+   avec un fond transparent). Navigation instantanée, plus simple et fiable. */

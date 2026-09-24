@@ -1,0 +1,36 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+*.local.md
+.env
+server/.env
+server/*.db
+server/*.sqlite
+server/uploads/
+server/backups/
+
+# Scripts jetables créés pendant une session (vérification ponctuelle,
+# migration ad hoc…) — jamais destinés à rester dans le repo, et parfois
+# porteurs d'un secret en clair (mot de passe de test, id de session...).
+server/_tmp-*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
