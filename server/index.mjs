@@ -23,6 +23,7 @@ import { settingsRouter } from './routes/settings.mjs'
 import { eventsRouter } from './routes/events.mjs'
 import { backupsRouter } from './routes/backups.mjs'
 import { reportsRouter } from './routes/reports.mjs'
+import { migrateRouter } from './routes/migrate.mjs'
 import { startCronJobs } from './cron.mjs'
 import { rateLimit } from './rateLimit.mjs'
 
@@ -63,6 +64,10 @@ app.use(rateLimit({ windowMs: 60 * 1000, max: 600 }))
 // Montée AVANT express.json() : Stripe a besoin du corps brut (non parsé)
 // pour vérifier la signature du webhook.
 app.use('/api/stripe/webhook', stripeWebhookRouter)
+// Montée avant express.json() pour la même raison que le webhook Stripe : a
+// besoin du flux brut, non parsé (voir le commentaire dans migrate.mjs —
+// route temporaire, à retirer après la migration des données réelles).
+app.use('/api/migrate', migrateRouter)
 app.use(express.json({ limit: '10mb' }))
 app.use('/uploads', express.static(uploadsDir))
 
