@@ -1,22 +1,35 @@
 import * as React from 'react'
 import '@ozcanyldzhn/liquid-glass-js'
 import '@ozcanyldzhn/liquid-glass-js/css'
-import { clearGlassConfig, getGlassConfig, setGlassConfig, type GlassSettings } from './liquidGlassConfig'
+interface GlassSettings {
+  engine: 'svg' | 'webgl'
+  surfaceFn: 'convex_squircle' | 'convex_circle' | 'concave' | 'lip'
+  ior: number
+  thickness: number
+  bezel: number
+  radius: number
+  blur: number
+  tintColor: string
+  tintOpacity: number
+  specularOpacity: number
+  specularSaturation: number
+  shadowBlur: number
+  shadowSpread: number
+}
 
-// Outil de réglage en direct, dev uniquement (jamais dans le build de
+// Outil d'exploration en direct, dev uniquement (jamais dans le build de
 // production — voir le montage conditionnel dans App.tsx) : "Sélectionner"
 // active un mode où cliquer sur n'importe quel bouton/élément réel de l'app
-// pose par-dessus un calque <liquid-glass> qui suit sa position à l'écran,
-// avec un panneau de réglages en direct façon "Physics Studio" du paquet
-// (mêmes paramètres : moteur, profil de surface, indice de réfraction,
-// épaisseur, lunette, rayon, flou, teinte, spéculaire, ombre).
-//
-// "Appliquer" écrit le réglage dans localStorage (voir liquidGlassConfig.ts)
-// puis recharge la page — les composants réels équipés d'un
-// `data-glass-key` (BottomNav pour l'instant) relisent ce réglage à leur
-// montage et rendent alors le vrai <liquid-glass> au lieu de leur verre CSS
-// habituel. "Copier les réglages" reste dispo en plus, pour me passer les
-// valeurs à la main si besoin.
+// pose par-dessus un calque <liquid-glass> à sa taille, avec un panneau de
+// réglages façon "Physics Studio" du paquet (mêmes paramètres). "Bulle
+// libre" fait la même chose mais sans cible réelle — une carte flottante
+// qu'on glisse (draggable natif du paquet) au-dessus de différents fonds de
+// la page pour juger l'effet. Aperçu uniquement — volontairement PAS de
+// bouton "Appliquer" : une tentative précédente d'appliquer ce paquet pour
+// de vrai sur la barre du bas a fait disparaître du contenu réel ailleurs
+// sur la page (bug silencieux du paquet, sans erreur console) — voir la clé
+// "Copier les réglages" pour transmettre des valeurs trouvées ici sans
+// jamais faire tourner le paquet sur un composant réel.
 
 type Engine = GlassSettings['engine']
 type SurfaceFn = GlassSettings['surfaceFn']
@@ -90,19 +103,19 @@ function Slider({
 export function LiquidGlassStudio() {
   const [selecting, setSelecting] = React.useState(false)
   const [target, setTarget] = React.useState<HTMLElement | null>(null)
-  const [glassKey, setGlassKey] = React.useState<string | null>(null)
-  const [rect, setRect] = React.useState<DOMRect | null>(null)
+  // Position/taille de départ du calque — capturée UNE FOIS à la sélection
+  // (ou au centre de l'écran pour "Bulle libre"), jamais resynchronisée en
+  // continu ensuite : le paquet gère lui-même le déplacement une fois
+  // `draggable="true"` posé (physique de glisser interne), une boucle qui
+  // recalerait la position à chaque frame entrerait en conflit avec elle.
+  const [startRect, setStartRect] = React.useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const [settings, setSettings] = React.useState<Settings>(DEFAULTS)
   const [copied, setCopied] = React.useState(false)
 
   const patch = (p: Partial<Settings>) => setSettings((s) => ({ ...s, ...p }))
 
-  // Mode sélection : survol met en évidence, clic choisit la cible (et
-  // empêche son action normale de se déclencher pendant qu'on choisit). Un
-  // élément qui porte `data-glass-key` (posé sur les composants réels
-  // équipés pour recevoir un réglage appliqué — voir BottomNav.tsx) rend
-  // possible le bouton "Appliquer" ; sans cet attribut sur la cible ou un de
-  // ses parents, l'outil reste utilisable en aperçu/copie seulement.
+  // Mode sélection : survol met en évidence, clic choisit la cible et fige
+  // sa position/taille de départ pour le calque de prévisualisation.
   React.useEffect(() => {
     if (!selecting) return
     let hovered: HTMLElement | null = null
@@ -119,14 +132,9 @@ export function LiquidGlassStudio() {
       e.preventDefault()
       e.stopPropagation()
       hovered?.style.removeProperty('outline')
-      const keyHolder = el.closest<HTMLElement>('[data-glass-key]')
-      const key = keyHolder?.dataset.glassKey ?? null
+      const r = el.getBoundingClientRect()
       setTarget(el)
-      setGlassKey(key)
-      if (key) {
-        const saved = getGlassConfig(key)
-        if (saved) setSettings(saved)
-      }
+      setStartRect({ left: r.left, top: r.top, width: r.width, height: r.height })
       setSelecting(false)
     }
     document.addEventListener('mouseover', onOver, true)
@@ -138,19 +146,11 @@ export function LiquidGlassStudio() {
     }
   }, [selecting])
 
-  // Le calque de prévisualisation suit la position réelle de la cible (page
-  // qui défile, redimensionnement...) via une boucle légère plutôt qu'un
-  // ResizeObserver+écouteurs multiples à démêler pour un outil temporaire.
-  React.useEffect(() => {
-    if (!target) return
-    let raf: number
-    const sync = () => {
-      setRect(target.getBoundingClientRect())
-      raf = requestAnimationFrame(sync)
-    }
-    sync()
-    return () => cancelAnimationFrame(raf)
-  }, [target])
+  const spawnFreeBubble = () => {
+    setSelecting(false)
+    setTarget(null)
+    setStartRect({ left: window.innerWidth / 2 - 150, top: window.innerHeight / 2 - 90, width: 300, height: 180 })
+  }
 
   const copySettings = async () => {
     const snippet = `<liquid-glass
@@ -173,66 +173,69 @@ export function LiquidGlassStudio() {
     setTimeout(() => setCopied(false), 1500)
   }
 
-  const applySettings = () => {
-    if (!glassKey) return
-    setGlassConfig(glassKey, settings)
-    // Recharge pour que le composant réel (BottomNav) se remonte et relise
-    // le nouveau réglage — plus simple et plus fiable qu'un canal d'events
-    // React à faire traverser toute l'arborescence pour un outil temporaire.
-    location.reload()
-  }
-
-  const removeApplied = () => {
-    if (!glassKey) return
-    clearGlassConfig(glassKey)
-    location.reload()
-  }
-
   return (
     <div data-lg-studio="true">
-      {/* Bouton d'activation, toujours visible */}
-      <button
-        type="button"
-        onClick={() => {
-          setSelecting((s) => !s)
-          setTarget(null)
-        }}
-        style={{
-          position: 'fixed',
-          bottom: 16,
-          left: 16,
-          zIndex: 100000,
-          background: selecting ? '#a3e635' : '#111827',
-          color: selecting ? '#111827' : '#fff',
-          border: 'none',
-          borderRadius: 999,
-          padding: '10px 16px',
-          fontSize: 13,
-          fontWeight: 600,
-          fontFamily: '-apple-system, sans-serif',
-          cursor: 'pointer',
-          boxShadow: '0 8px 20px rgba(0,0,0,0.35)',
-        }}
-      >
-        🔮 {selecting ? 'Clique sur un élément…' : target ? 'Changer de bouton' : 'Sélectionner un bouton'}
-      </button>
+      {/* Boutons d'activation, toujours visibles */}
+      <div style={{ position: 'fixed', bottom: 16, left: 16, zIndex: 100000, display: 'flex', gap: 8 }}>
+        <button
+          type="button"
+          onClick={() => {
+            setSelecting((s) => !s)
+            setTarget(null)
+            setStartRect(null)
+          }}
+          style={{
+            background: selecting ? '#a3e635' : '#111827',
+            color: selecting ? '#111827' : '#fff',
+            border: 'none',
+            borderRadius: 999,
+            padding: '10px 16px',
+            fontSize: 13,
+            fontWeight: 600,
+            fontFamily: '-apple-system, sans-serif',
+            cursor: 'pointer',
+            boxShadow: '0 8px 20px rgba(0,0,0,0.35)',
+          }}
+        >
+          🔮 {selecting ? 'Clique sur un élément…' : target ? 'Changer de bouton' : 'Sélectionner un bouton'}
+        </button>
+        <button
+          type="button"
+          onClick={spawnFreeBubble}
+          style={{
+            background: '#111827',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 999,
+            padding: '10px 16px',
+            fontSize: 13,
+            fontWeight: 600,
+            fontFamily: '-apple-system, sans-serif',
+            cursor: 'pointer',
+            boxShadow: '0 8px 20px rgba(0,0,0,0.35)',
+          }}
+        >
+          🫧 Bulle libre
+        </button>
+      </div>
 
-      {/* Calque liquid-glass posé sur la cible sélectionnée */}
-      {target && rect && (
+      {/* Calque liquid-glass à glisser librement — draggable natif du
+          paquet, voir la note sur startRect plus haut. */}
+      {startRect && (
         <div
           style={{
             position: 'fixed',
-            left: rect.left,
-            top: rect.top,
-            width: rect.width,
-            height: rect.height,
+            left: startRect.left,
+            top: startRect.top,
+            width: startRect.width,
+            height: startRect.height,
             zIndex: 99998,
-            pointerEvents: 'none',
           }}
         >
           <liquid-glass
-            width={String(Math.round(rect.width))}
-            height={String(Math.round(rect.height))}
+            width={String(Math.round(startRect.width))}
+            height={String(Math.round(startRect.height))}
+            draggable
             engine={settings.engine}
             surface-fn={settings.surfaceFn}
             ior={String(settings.ior)}
@@ -251,7 +254,7 @@ export function LiquidGlassStudio() {
       )}
 
       {/* Panneau de réglages */}
-      {target && (
+      {startRect && (
         <div
           data-lg-studio="true"
           style={{
@@ -275,14 +278,10 @@ export function LiquidGlassStudio() {
           }}
         >
           <div style={{ fontSize: 14, fontWeight: 700 }}>Réglages du verre</div>
-
-          {glassKey ? (
-            <div style={{ fontSize: 11, color: '#a3e635' }}>Cible : {glassKey} (réglages applicables)</div>
-          ) : (
-            <div style={{ fontSize: 11, color: '#f59e0b' }}>
-              Cet élément n'est pas encore équipé pour recevoir un réglage appliqué — aperçu et copie seulement.
-            </div>
-          )}
+          <div style={{ fontSize: 11, color: '#9ca3af' }}>
+            {target ? 'Aperçu sur la taille de l’élément choisi' : 'Bulle libre'} — glisse-la sur la page pour tester
+            différents fonds.
+          </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {Object.keys(PRESETS).map((name) => (
@@ -392,54 +391,17 @@ export function LiquidGlassStudio() {
 
           <button
             type="button"
-            onClick={applySettings}
-            disabled={!glassKey}
-            style={{
-              background: glassKey ? '#a3e635' : '#374151',
-              color: glassKey ? '#111827' : '#6b7280',
-              border: 'none',
-              borderRadius: 8,
-              padding: '10px 12px',
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: glassKey ? 'pointer' : 'not-allowed',
-              marginTop: 4,
-            }}
-          >
-            ✓ Appliquer pour de vrai
-          </button>
-
-          {glassKey && (
-            <button
-              type="button"
-              onClick={removeApplied}
-              style={{
-                background: 'none',
-                color: '#ef4444',
-                border: '1px solid #ef4444',
-                borderRadius: 8,
-                padding: '8px 12px',
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Retirer le réglage appliqué
-            </button>
-          )}
-
-          <button
-            type="button"
             onClick={copySettings}
             style={{
-              background: '#1f2937',
-              color: '#e5e7eb',
+              background: '#2563eb',
+              color: '#fff',
               border: 'none',
               borderRadius: 8,
               padding: '10px 12px',
               fontSize: 13,
               fontWeight: 600,
               cursor: 'pointer',
+              marginTop: 4,
             }}
           >
             {copied ? '✓ Copié !' : 'Copier les réglages'}
