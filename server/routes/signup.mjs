@@ -86,7 +86,13 @@ signupRouter.post('/', emailActionLimiter, async (req, res) => {
      VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, 1, ?)`,
   ).run(userId, cleanEmail, hashPassword(password), firstName ?? null, lastName ?? null, now())
 
-  await sendVerificationEmail(req, userId, cleanEmail)
+  // Ne jamais attendre l'envoi ici — un SMTP lent ou temporairement
+  // injoignable (déjà vu depuis un serveur distant, cf. Gmail qui peut
+  // ralentir/bloquer une IP inconnue) bloquerait toute la requête de
+  // création de compte, laissant l'écran d'inscription tourner dans le vide
+  // alors que le compte est en réalité déjà créé. sendVerificationEmail a
+  // déjà son propre try/catch qui journalise l'échec sans jamais lever.
+  sendVerificationEmail(req, userId, cleanEmail)
 
   res.json({ ok: true })
 })
@@ -99,7 +105,7 @@ signupRouter.post('/resend', emailActionLimiter, async (req, res) => {
   const cleanEmail = String(req.body?.email ?? '').trim().toLowerCase()
   const user = db.prepare('SELECT id, email_verified_at FROM users WHERE email = ?').get(cleanEmail)
   if (user && !user.email_verified_at) {
-    await sendVerificationEmail(req, user.id, cleanEmail)
+    sendVerificationEmail(req, user.id, cleanEmail)
   }
   res.json({ ok: true })
 })
@@ -150,11 +156,11 @@ signupRouter.post('/forgot-password', emailActionLimiter, async (req, res) => {
     )
 
     const link = `${publicUrlFor(req)}/reinitialiser-mot-de-passe/${token}`
-    try {
-      await sendMail({ to: cleanEmail, subject: 'Réinitialise ton mot de passe — Intervia', html: resetPasswordHtml(link) })
-    } catch (e) {
-      console.log(`[signup] email de réinitialisation non envoyé (${e.message}) — lien : ${link}`)
-    }
+    // Même raison qu'à l'inscription (voir sendVerificationEmail) : ne
+    // jamais laisser un SMTP lent bloquer la réponse HTTP.
+    sendMail({ to: cleanEmail, subject: 'Réinitialise ton mot de passe — Intervia', html: resetPasswordHtml(link) }).catch(
+      (e) => console.log(`[signup] email de réinitialisation non envoyé (${e.message}) — lien : ${link}`),
+    )
   }
 
   res.json({ ok: true })

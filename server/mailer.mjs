@@ -11,6 +11,13 @@ function getTransporter() {
     transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_APP_PASSWORD },
+      // Sans ces délais, un SMTP qui traîne (observé depuis un serveur
+      // distant) peut rester bloqué plusieurs minutes avant d'échouer — les
+      // appelants ne l'attendent plus (voir signup.mjs), mais un délai
+      // raisonnable reste plus sain qu'une connexion qui traîne sans fin.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
     })
   }
   return transporter
