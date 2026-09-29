@@ -9,7 +9,7 @@ settingsRouter.use(requireAuth)
 // Valeurs de départ si l'entreprise n'a encore rien configuré — reprennent
 // les informations déjà en dur ailleurs dans l'app avant ce réglage.
 const DEFAULT_COMPANY = {
-  name: 'PSE DÉPANNAGE',
+  name: 'Intervia',
   legalForm: 'SARL',
   address: '58 rue de Monceau, 75008 Paris',
   siret: '99474318500013',

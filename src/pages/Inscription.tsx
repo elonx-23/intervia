@@ -91,10 +91,10 @@ export default function Inscription() {
     <div className="flex min-h-svh flex-col items-center justify-center gap-6 px-4 py-10">
       <div className="flex flex-col items-center gap-3">
         <div
-          className="glass-strong flex size-16 items-center justify-center rounded-3xl text-xl font-bold text-primary"
+          className="glass-strong flex size-16 items-center justify-center rounded-3xl p-3"
           style={{ '--elevation-shadow': '0 10px 30px -8px var(--primary)' } as React.CSSProperties}
         >
-          PSE
+          <img src="/marketing/logo-mark.png" alt="Intervia" className="size-full object-contain" />
         </div>
         <div className="text-center">
           <h1 className="text-xl font-semibold tracking-tight">Créer un compte</h1>

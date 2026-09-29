@@ -4,7 +4,7 @@
 // endroits qui lisent COMPANY.xxx au moment de l'affichage (pas à
 // l'import) voient donc automatiquement la valeur à jour.
 export const COMPANY = {
-  name: 'PSE DÉPANNAGE',
+  name: 'Intervia',
   legalForm: 'SARL',
   address: '58 rue de Monceau, 75008 Paris',
   siret: '99474318500013',

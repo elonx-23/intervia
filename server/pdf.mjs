@@ -16,7 +16,7 @@ import { uploadsDir } from './routes/upload.mjs'
 // Entreprise (table "settings"), pas d'une constante figée — ces valeurs ne
 // servent que de repli tant que rien n'a été configuré.
 const DEFAULT_COMPANY = {
-  name: 'PSE DÉPANNAGE',
+  name: 'Intervia',
   legalForm: 'SARL',
   address: '58 rue de Monceau, 75008 Paris',
   siret: '99474318500013',
@@ -162,7 +162,7 @@ function drawLogo(pdf, x, y, logoDataUrl, initials) {
   pdf.setTextColor(255, 255, 255)
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(initials && initials.length > 2 ? 6.5 : 8)
-  pdf.text(initials || 'PSE', x + 7, y + 8.5, { align: 'center' })
+  pdf.text(initials || 'IN', x + 7, y + 8.5, { align: 'center' })
 }
 
 export function generateDocumentPdfBuffer(doc) {

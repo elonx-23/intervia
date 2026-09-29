@@ -49,7 +49,7 @@ async function loadImageAsDataUrl(url: string): Promise<string | null> {
 
 // Logo auto-généré tant qu'aucun logo n'a été chargé dans Réglages →
 // Entreprise : initiales du nom de la société (ex. "PSE DÉPANNAGE" → "PD"),
-// jamais le texte "PSE" en dur — reste pertinent si la société est renommée.
+// jamais un nom codé en dur — reste pertinent si la société est renommée.
 function companyInitials(name: string) {
   const words = name.trim().split(/\s+/).filter(Boolean)
   if (words.length === 0) return '—'
@@ -75,7 +75,7 @@ function drawLogo(pdf: jsPDF, x: number, y: number, logoDataUrl?: string | null,
   pdf.setTextColor(255, 255, 255)
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(initials && initials.length > 2 ? 6.5 : 8)
-  pdf.text(initials || 'PSE', x + 7, y + 8.5, { align: 'center' })
+  pdf.text(initials || 'IN', x + 7, y + 8.5, { align: 'center' })
 }
 
 export async function generateDocumentPdf(doc: PseDocument): Promise<jsPDF> {
