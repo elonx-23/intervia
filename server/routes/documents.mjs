@@ -497,6 +497,15 @@ documentsRouter.post('/', (req, res) => {
     now(),
   )
 
+  // Une facture créée directement (pas via un devis signé, voir /:id/convert
+  // plus bas qui fait déjà ce même UPDATE) doit faire passer l'intervention
+  // liée à "facturee" — sinon elle reste invisible dans les stats par
+  // technicien/secteur (calculées sur le statut de l'intervention, pas sur
+  // l'existence de la facture) alors que le client a bien été facturé.
+  if (kind === 'facture' && b.interventionId) {
+    db.prepare("UPDATE interventions SET status = 'facturee' WHERE id = ?").run(b.interventionId)
+  }
+
   broadcast('documents_changed', {}, req.caller.team_id)
   res.json(toApi(db.prepare('SELECT * FROM documents WHERE id = ?').get(id)))
 })
