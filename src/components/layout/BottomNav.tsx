@@ -285,6 +285,26 @@ export function BottomNav() {
     <>
       <CreateActions open={createOpen} onClose={() => setCreateOpen(false)} actions={actions} />
 
+      {/* Lueur colorée fixe SOUS la barre (jamais À L'INTÉRIEUR de son
+          verre) — c'est le contenu réel derrière un backdrop-filter qui lui
+          donne des couleurs à capter en glissant d'un onglet à l'autre
+          (comme le "jeu de couleurs" d'Apple), pas une image statique :
+          sans rien de coloré à traverser, le verre reste neutre quel que
+          soit le style qu'on lui donne. Trois taches largement diffuses,
+          jamais franches — un simple arrière-plan discret, pas un néon. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-[39] flex h-20 justify-center overflow-hidden px-4"
+      >
+        <div
+          className="h-full w-full max-w-md opacity-45 blur-2xl"
+          style={{
+            background:
+              'radial-gradient(35% 70% at 15% 60%, oklch(0.7 0.18 259 / 55%), transparent 70%), radial-gradient(35% 70% at 50% 40%, oklch(0.72 0.2 320 / 45%), transparent 70%), radial-gradient(35% 70% at 85% 60%, oklch(0.75 0.17 200 / 50%), transparent 70%)',
+          }}
+        />
+      </div>
+
       {/* Ancre simple et inconditionnelle à "bottom: 0" (aucun calcul dans
           la propriété bottom elle-même) — WebKit/Safari a un historique de
           recalculs instables quand un élément fixe combine calc()+env()
