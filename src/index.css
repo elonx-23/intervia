@@ -290,30 +290,6 @@
     background-color: oklch(0.19 0.02 260 / 30%);
   }
 
-  /* Vraie déformation optique (pas juste flou+teinte) sur Chrome/Chromium —
-     voir LiquidGlassDefs.tsx. `.lens-capable` est ajouté en JS seulement si
-     le navigateur est Chromium ; sur Safari .glass garde son flou normal
-     ci-dessus, sans rien de cassé. */
-  /* Le flou doit rester LÉGER ici — un gros flou appliqué après la
-     déformation (l'ordre dans la liste de filtres compte) lisse quasiment
-     toute la courbure de la lentille et ne laisse plus qu'un flou terne.
-     La netteté de la matière derrière vient de la lentille elle-même, pas
-     d'un flou fort. */
-  .lens-capable .glass {
-    backdrop-filter: url(#liquid-glass-lens) blur(6px) saturate(220%) brightness(1.1) contrast(1.02);
-  }
-  .lens-capable .glass-strong {
-    backdrop-filter: url(#liquid-glass-lens-strong) blur(8px) saturate(220%) brightness(1.1) contrast(1.02);
-  }
-  .lens-capable .glass-lens {
-    backdrop-filter: url(#liquid-glass-lens) blur(5px) saturate(200%) brightness(1.1) contrast(1.02);
-  }
-  /* Au toucher, la lentille se creuse davantage — cohérent avec la
-     compression physique de .liquid-pressed sur le même élément. */
-  .lens-capable .glass-lens.liquid-pressed {
-    backdrop-filter: url(#liquid-glass-lens-strong) blur(4px) saturate(210%) brightness(1.12) contrast(1.03);
-  }
-
 }
 
 /* Matériau "verre liquide" interactif — piloté en temps réel par la position
