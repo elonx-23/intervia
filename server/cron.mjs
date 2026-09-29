@@ -4,6 +4,8 @@ import { db, now, uuid } from './db.mjs'
 import { sendMail } from './mailer.mjs'
 import { runScheduledBackup } from './backup.mjs'
 import { deliverPendingPush } from './push.mjs'
+import { generateDocumentPdfBuffer } from './pdf.mjs'
+import { wrapEmail, ctaButton, fallbackLink } from './emailTemplates.mjs'
 
 // Utilisée pour construire le lien de consultation dans les emails envoyés
 // depuis le cron (pas de `req` disponible ici, contrairement aux routes) —
@@ -86,14 +88,25 @@ async function runAutoRelances() {
     const link = `${PUBLIC_URL}/facture/${doc.public_token}`
 
     try {
+      const pdfBuffer = generateDocumentPdfBuffer({
+        ...doc,
+        items,
+        photos_before: JSON.parse(doc.photos_before ?? '[]'),
+        photos_after: JSON.parse(doc.photos_after ?? '[]'),
+      })
       await sendMail({
         to: doc.email,
         subject: `Rappel — Facture ${doc.number} en attente de paiement`,
-        html: `<p>Bonjour ${escapeHtml(doc.client_first_name)},</p>
-          <p>Nous n'avons pas encore reçu le règlement de votre facture <strong>${doc.number}</strong> (${ttc} € TTC).</p>
-          <p><a href="${link}">${link}</a></p>
-          <p>Merci de bien vouloir régulariser dans les meilleurs délais.</p>
-          <p>PSE Dépannage</p>`,
+        html: wrapEmail({
+          preheader: `Facture ${doc.number} en attente de paiement (${ttc} € TTC).`,
+          bodyHtml: `
+            <p>Bonjour ${escapeHtml(doc.client_first_name)},</p>
+            <p>Nous n'avons pas encore reçu le règlement de votre facture <strong>${doc.number}</strong> (${ttc} € TTC), jointe à cet email.</p>
+            ${ctaButton(doc.signature_data ? 'Consulter la facture' : 'Consulter et signer la facture', link)}
+            ${fallbackLink(link)}
+            <p>Merci de bien vouloir régulariser dans les meilleurs délais.</p>`,
+        }),
+        attachments: [{ filename: `${doc.number}.pdf`, content: pdfBuffer }],
       })
       db.prepare('UPDATE documents SET relance_count = relance_count + 1, last_relance_at = ? WHERE id = ?').run(
         now(),

@@ -367,6 +367,16 @@ export async function downloadDocumentPdf(doc: PseDocument) {
   pdf.save(`${doc.number}.pdf`)
 }
 
+// URL blob affichable directement dans un <iframe> (page de signature
+// publique) — à la différence de downloadDocumentPdf, ne déclenche aucun
+// téléchargement. L'appelant doit révoquer l'URL (URL.revokeObjectURL)
+// une fois qu'il n'en a plus besoin, pour ne pas fuiter de mémoire à
+// chaque régénération (ex. après signature).
+export async function getDocumentPdfBlobUrl(doc: PseDocument): Promise<string> {
+  const pdf = await generateDocumentPdf(doc)
+  return pdf.output('bloburl') as unknown as string
+}
+
 export async function downloadRelevePdf(
   technicienName: string,
   from: string,

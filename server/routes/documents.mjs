@@ -1,6 +1,6 @@
 import { Router } from 'express'
 
-import { db, now, uuid } from '../db.mjs'
+import { db, getSetting, now, uuid } from '../db.mjs'
 import { requireAdmin, requireAuth } from '../auth.mjs'
 import { notifyAdmin } from '../notify.mjs'
 import { sendMail } from '../mailer.mjs'
@@ -33,6 +33,14 @@ function toApi(row) {
 
 function itemsTotalHT(items) {
   return items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0)
+}
+
+// Chaque équipe a sa propre entreprise (Réglages → Entreprise) — l'objet de
+// l'email doit refléter SA raison sociale, jamais un nom d'équipe codé en
+// dur. "Intervia" (le produit, pas une entreprise cliente) sert de repli
+// tant qu'une équipe n'a pas encore renseigné la sienne.
+function companyName(teamId) {
+  return getSetting('company', teamId)?.name || 'Intervia'
 }
 
 function discountAmount(ht, discountType, discountValue) {
@@ -214,7 +222,7 @@ documentsRouter.post('/:id/email', externalActionLimiter, async (req, res) => {
     const pdfBuffer = generateDocumentPdfBuffer(toApi(doc))
     await sendMail({
       to: doc.email,
-      subject: `Votre ${label} PSE Dépannage — ${doc.number}`,
+      subject: `Votre ${label} ${companyName(doc.team_id)} — ${doc.number}`,
       html: emailHtml({
         greeting: doc.client_first_name,
         intro: `Voici votre ${label} <strong>${doc.number}</strong> (${ttc} € TTC), jointe à cet email au format PDF.`,

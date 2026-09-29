@@ -1,28 +1,26 @@
-import { CheckCircle2, Eraser } from 'lucide-react'
+import { Printer, Signature } from 'lucide-react'
 import * as React from 'react'
 import { useParams } from 'react-router-dom'
 
-import { SignaturePad, type SignaturePadHandle } from '@/components/SignaturePad'
+import { PublicSignatureDialog } from '@/components/PublicSignatureDialog'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { legalFooterLines } from '@/lib/company'
-import {
-  adjustmentLabel,
-  discountAmount,
-  getDocumentByToken,
-  itemsTotalHT,
-  signDocumentPublic,
-  totalTTC,
-  type PseDocument,
-} from '@/lib/documents'
+import { getDocumentByToken, type PseDocument } from '@/lib/documents'
 import { friendlyError } from '@/lib/errors'
 
+// Le lien "Consulter et signer" reçu par email affiche directement le vrai
+// PDF du devis (même rendu que le téléchargement, dans un <iframe> qui
+// occupe toute la page) plutôt qu'un résumé stylisé différent du document
+// réel — le client doit voir exactement ce qu'il signe. Un bouton flottant
+// en haut à droite porte l'action possible : "Signer" tant que le devis ne
+// l'est pas, puis "Imprimer" une fois signé (le devis ne peut plus être
+// signé une seconde fois — cette action "expire" dès la signature).
 export default function SignDevis() {
   const { token } = useParams()
   const [doc, setDoc] = React.useState<PseDocument | null>(null)
   const [error, setError] = React.useState<string | null>(null)
-  const [saving, setSaving] = React.useState(false)
-  const padRef = React.useRef<SignaturePadHandle>(null)
+  const [pdfUrl, setPdfUrl] = React.useState<string | null>(null)
+  const [signOpen, setSignOpen] = React.useState(false)
+  const iframeRef = React.useRef<HTMLIFrameElement>(null)
 
   React.useEffect(() => {
     if (!token) return
@@ -30,6 +28,29 @@ export default function SignDevis() {
       .then(setDoc)
       .catch((e) => setError(friendlyError(e, 'Devis introuvable.')))
   }, [token])
+
+  // Régénère le PDF affiché à chaque changement du document (chargement
+  // initial, puis après signature — le PDF regénéré inclut alors la
+  // signature). Révoque l'ancienne URL blob pour ne pas fuiter de mémoire.
+  React.useEffect(() => {
+    if (!doc) return
+    let cancelled = false
+    let objectUrl: string | null = null
+    import('@/lib/pdf').then(({ getDocumentPdfBlobUrl }) =>
+      getDocumentPdfBlobUrl(doc).then((url) => {
+        if (cancelled) {
+          URL.revokeObjectURL(url)
+          return
+        }
+        objectUrl = url
+        setPdfUrl(url)
+      }),
+    )
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [doc])
 
   if (error && !doc) {
     return (
@@ -46,103 +67,34 @@ export default function SignDevis() {
     )
   }
 
-  const client = [doc.client_first_name, doc.client_last_name].filter(Boolean).join(' ')
-  const ht = itemsTotalHT(doc.items)
-  const remise = discountAmount(ht, doc.discount_type, doc.discount_value)
-  const adj = adjustmentLabel(remise)
-  const ttc = totalTTC(doc.items, doc.vat_rate, doc.discount_type, doc.discount_value)
-
-  if (doc.status === 'signe') {
-    return (
-      <div className="mx-auto flex min-h-svh w-full max-w-lg flex-col items-center justify-center gap-3 px-6 text-center">
-        <CheckCircle2 className="size-14 text-success" />
-        <h1 className="text-xl font-semibold tracking-tight">Devis signé</h1>
-        <p className="text-sm text-muted-foreground">
-          Merci {doc.client_first_name || ''}, ce devis a été accepté le{' '}
-          {new Date(doc.signed_at!).toLocaleDateString('fr-FR')}.
-        </p>
-      </div>
-    )
-  }
-
-  const submit = async () => {
-    if (!token || !padRef.current || padRef.current.isEmpty()) {
-      setError('Merci de signer avant de valider.')
-      return
-    }
-    setSaving(true)
-    setError(null)
-    try {
-      const updated = await signDocumentPublic(token, padRef.current.toDataURL())
-      setDoc(updated)
-    } catch (e) {
-      setError(friendlyError(e, 'Erreur lors de la signature.'))
-    } finally {
-      setSaving(false)
-    }
-  }
+  const isSigned = doc.status === 'signe'
 
   return (
-    <div className="mx-auto flex min-h-svh w-full max-w-lg flex-col gap-4 px-4 py-8">
-      <div className="text-center">
-        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Devis {doc.number}</p>
-        <h1 className="text-xl font-semibold tracking-tight">{client}</h1>
-        {doc.address && <p className="text-sm text-muted-foreground">{doc.address}</p>}
-      </div>
-
-      <Card>
-        <CardContent className="flex flex-col gap-2 text-sm">
-          {doc.items.map((item, i) => (
-            <div key={i} className="flex justify-between gap-2">
-              <span className="min-w-0">
-                <span className="block">
-                  {item.label} × {item.quantity}
-                </span>
-                {item.description && (
-                  <span className="block text-xs text-muted-foreground">{item.description}</span>
-                )}
-              </span>
-              <span className="shrink-0">{(item.quantity * item.unitPrice).toFixed(2)} €</span>
-            </div>
-          ))}
-          <div className="mt-2 flex flex-col items-end border-t border-border/70 pt-2">
-            <span className="text-muted-foreground">Total HT : {ht.toFixed(2)} €</span>
-            {remise !== 0 && (
-              <span className="text-muted-foreground">
-                {adj.label} : {adj.sign}{adj.amount.toFixed(2)} €
-              </span>
-            )}
-            <span className="text-lg font-semibold">{ttc.toFixed(2)} € TTC</span>
-          </div>
-          {doc.notes && <p className="mt-1 text-muted-foreground">{doc.notes}</p>}
-        </CardContent>
-      </Card>
-
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">Ta signature</p>
-          <Button variant="ghost" size="sm" onClick={() => padRef.current?.clear()}>
-            <Eraser className="size-4" /> Effacer
+    <div className="fixed inset-0 flex flex-col bg-secondary">
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-background px-4 py-2.5">
+        <p className="truncate text-sm font-medium">Devis {doc.number}</p>
+        {isSigned ? (
+          <Button size="sm" variant="outline" onClick={() => iframeRef.current?.contentWindow?.print()}>
+            <Printer className="size-4" />
+            Imprimer
           </Button>
+        ) : (
+          <Button size="sm" onClick={() => setSignOpen(true)}>
+            <Signature className="size-4" />
+            Signer
+          </Button>
+        )}
+      </div>
+
+      {pdfUrl ? (
+        <iframe ref={iframeRef} src={pdfUrl} title={`Devis ${doc.number}`} className="h-full w-full border-0" />
+      ) : (
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-muted-foreground">Génération du PDF…</p>
         </div>
-        <SignaturePad
-          ref={padRef}
-          className="h-44 w-full touch-none rounded-2xl border border-border bg-white shadow-inner"
-        />
-        <p className="text-center text-xs text-muted-foreground">Signe avec le doigt directement sur l'écran</p>
-      </div>
+      )}
 
-      {error && <p className="text-center text-sm text-destructive">{error}</p>}
-
-      <Button size="lg" onClick={submit} disabled={saving}>
-        {saving ? 'Envoi…' : 'Valider et signer'}
-      </Button>
-
-      <div className="border-t border-border/70 pt-3 text-center text-[10px] text-muted-foreground">
-        {legalFooterLines().map((l) => (
-          <p key={l}>{l}</p>
-        ))}
-      </div>
+      <PublicSignatureDialog document={doc} open={signOpen} onOpenChange={setSignOpen} onSigned={setDoc} />
     </div>
   )
 }
