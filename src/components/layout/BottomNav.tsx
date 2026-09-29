@@ -305,7 +305,7 @@ export function BottomNav() {
         }}
       >
         <nav
-          className="glass-strong bottom-nav-glass pointer-events-auto flex w-full max-w-md items-center justify-between gap-0.5 rounded-full px-2 py-1.5"
+          className="glass-strong bottom-nav-glass pointer-events-auto flex w-full max-w-md items-center justify-between gap-0.5 rounded-full px-2 py-0.5"
           style={{
             // @ts-expect-error propriété CSS personnalisée
             '--elevation-shadow': '0 8px 30px -8px rgba(0,0,0,0.35), 0 2px 8px -2px rgba(0,0,0,0.18)',
