@@ -39,3 +39,7 @@ export async function listReports(sessionId: string) {
 export async function listReportsByIntervention(sessionId: string, interventionId: string) {
   return apiFetch<InterventionReport[]>(`/api/reports/by-intervention/${interventionId}`, { sessionId })
 }
+
+export async function sendReportEmail(sessionId: string, id: string, email: string) {
+  await apiFetch(`/api/reports/${id}/email`, { method: 'POST', sessionId, body: { email } })
+}

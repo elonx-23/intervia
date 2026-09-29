@@ -8,6 +8,7 @@ import { generateDocumentPdfBuffer } from '../pdf.mjs'
 import { getStripe } from '../stripe.mjs'
 import { broadcast } from '../events.mjs'
 import { rateLimit } from '../rateLimit.mjs'
+import { wrapEmail, ctaButton, fallbackLink } from '../emailTemplates.mjs'
 
 export const documentsRouter = Router()
 
@@ -80,20 +81,15 @@ function escapeHtml(value) {
 // inline requis pour un rendu correct dans les clients mail (Gmail, Outlook…
 // n'appliquent pas de <style> externe).
 function emailHtml({ greeting, intro, ctaLabel, ctaLink, outro }) {
-  return `
-    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; color: #1e1e23; max-width: 480px; margin: 0 auto;">
+  return wrapEmail({
+    preheader: intro.replace(/<[^>]+>/g, ''),
+    bodyHtml: `
       <p>Bonjour ${escapeHtml(greeting)},</p>
       <p>${intro}</p>
-      <p style="text-align: center; margin: 28px 0;">
-        <a href="${ctaLink}" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-weight: 600; display: inline-block;">${ctaLabel}</a>
-      </p>
+      ${ctaButton(ctaLabel, ctaLink)}
       ${outro ? `<p>${outro}</p>` : ''}
-      <p style="color: #6b6b78; font-size: 12px; margin-top: 24px;">
-        Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br />
-        <a href="${ctaLink}" style="color: #2563eb;">${ctaLink}</a>
-      </p>
-      <p>PSE Dépannage</p>
-    </div>`
+      ${fallbackLink(ctaLink)}`,
+  })
 }
 
 // L'équipe est le premier filtre, avant tout le reste : un document d'une

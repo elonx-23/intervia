@@ -20,9 +20,9 @@ import {
   type PseDocument,
 } from '@/lib/documents'
 import { friendlyError } from '@/lib/errors'
-import { downloadReportPdf } from '@/lib/pdf'
 import { listReports, type InterventionReportListItem } from '@/lib/reports'
 import { normalizeSearch } from '@/lib/utils'
+import { ReportActionsDialog } from '@/components/ReportActionsDialog'
 
 function matchesSearch(d: PseDocument, query: string) {
   const q = normalizeSearch(query.trim())
@@ -59,6 +59,7 @@ export function Documents({ kind }: { kind: DocumentKind }) {
   const [filter, setFilter] = React.useState<DevisFilter | FactureFilter>('toutes')
   const [searchOpen, setSearchOpen] = React.useState(false)
   const [search, setSearch] = React.useState('')
+  const [openReport, setOpenReport] = React.useState<InterventionReportListItem | null>(null)
 
   const isAdmin = session?.role === 'admin'
 
@@ -267,7 +268,12 @@ export function Documents({ kind }: { kind: DocumentKind }) {
                 <div className="flex flex-col">
                   {group.items.map((entry) =>
                     entry.type === 'rapport' ? (
-                      <ReportRow key={entry.report.id} report={entry.report} alt={rowIndex++ % 2 === 1} />
+                      <ReportRow
+                        key={entry.report.id}
+                        report={entry.report}
+                        alt={rowIndex++ % 2 === 1}
+                        onOpen={() => setOpenReport(entry.report)}
+                      />
                     ) : (
                       <DocumentRow
                         key={entry.doc.id}
@@ -286,6 +292,8 @@ export function Documents({ kind }: { kind: DocumentKind }) {
           </div>
         </SwipeToDeleteGroup>
       </div>
+
+      <ReportActionsDialog report={openReport} open={openReport !== null} onOpenChange={(o) => !o && setOpenReport(null)} />
     </Page>
   )
 }
@@ -376,34 +384,25 @@ function DocumentRow({
 // factures — fond bleu translucide façon "verre" (même famille que .glass,
 // juste une teinte primaire en plus) pour qu'on le distingue d'un coup
 // d'œil d'une vraie facture, pas de montant ni de statut payé à afficher.
-// Cliquer régénère directement le PDF (pas de fiche à ouvrir/éditer).
-function ReportRow({ report, alt }: { report: InterventionReportListItem; alt: boolean }) {
-  const { session } = useAuth()
+// Cliquer ouvre le dialog d'actions (télécharger / envoyer par email) plutôt
+// que de régénérer directement le PDF — l'envoi par email demande de saisir
+// une adresse, pas la place pour ça dans une simple ligne de liste.
+function ReportRow({
+  report,
+  alt,
+  onOpen,
+}: {
+  report: InterventionReportListItem
+  alt: boolean
+  onOpen: () => void
+}) {
   const client = [report.i_client_first_name, report.i_client_last_name].filter(Boolean).join(' ')
   const eventDate = report.i_completed_at ?? report.i_started_at ?? report.i_created_at
-
-  const download = () => {
-    if (!session) return
-    const technicienName = [session.firstName, session.lastName].filter(Boolean).join(' ') || 'Technicien'
-    downloadReportPdf(
-      technicienName,
-      {
-        reference: report.i_reference,
-        clientFirstName: report.i_client_first_name,
-        clientLastName: report.i_client_last_name,
-        address: report.i_address,
-        interventionType: report.i_intervention_type,
-        description: report.i_description,
-        eventDate,
-      },
-      report.notes,
-    ).catch(() => {})
-  }
 
   return (
     <button
       type="button"
-      onClick={download}
+      onClick={onOpen}
       className={`liquid flex w-full items-center justify-between gap-3 border-b border-border/60 bg-primary/8 px-3 py-3 text-left backdrop-blur-sm last:border-b-0 ${alt ? 'bg-primary/12' : ''}`}
     >
       <div className="flex min-w-0 items-center gap-2.5">

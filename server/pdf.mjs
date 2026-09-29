@@ -436,3 +436,76 @@ export function generateDocumentPdfBuffer(doc) {
 
   return Buffer.from(pdf.output('arraybuffer'))
 }
+
+// Miroir serveur de downloadReportPdf (src/lib/pdf.ts) — même mise en page,
+// nécessaire pour joindre le rapport en PDF à un email (le téléchargement
+// client existant ne peut pas produire un buffer envoyable par le serveur).
+export function generateReportPdfBuffer({ report, intervention, technicienName }) {
+  const company = getCompany(intervention.team_id)
+  const pdf = new jsPDF()
+  const pageWidth = pdf.internal.pageSize.getWidth()
+  const margin = 14
+
+  drawLogo(pdf, margin, 14, readLogoDataUrl(company.logoUrl), companyInitials(company.name))
+  pdf.setTextColor(...DARK)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(15)
+  pdf.text(company.name, margin + 18, 23)
+
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(19)
+  pdf.text("Rapport d'intervention", margin, 42)
+
+  const client = [intervention.client_first_name, intervention.client_last_name].filter(Boolean).join(' ') || '-'
+  const eventDate = intervention.completed_at ?? intervention.started_at ?? intervention.created_at
+
+  const infoRows = [
+    ['Référence', intervention.reference],
+    ['Date', fmtDate(eventDate)],
+    ['Heure', new Date(eventDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })],
+    ['Technicien', technicienName],
+    ['Client', client],
+    ['Adresse', intervention.address ?? '-'],
+    ["Type d'intervention", intervention.intervention_type || '-'],
+  ]
+
+  autoTable(pdf, {
+    startY: 50,
+    margin: { left: margin, right: margin },
+    body: infoRows,
+    styles: { fontSize: 9.5, cellPadding: 3, textColor: DARK, lineColor: GRAY_LINE, lineWidth: 0.2 },
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 } },
+  })
+  let y = pdf.lastAutoTable.finalY + 10
+
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(10)
+  pdf.setTextColor(...DARK)
+  pdf.text('Description', margin, y)
+  y += 5
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(9)
+  pdf.setTextColor(...GRAY_TEXT)
+  const descLines = pdf.splitTextToSize(intervention.description || 'Aucune description.', pageWidth - margin * 2)
+  pdf.text(descLines, margin, y)
+  y += descLines.length * 4.5 + 10
+
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(10)
+  pdf.setTextColor(...DARK)
+  pdf.text('Compte-rendu du technicien', margin, y)
+  y += 5
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(9)
+  pdf.setTextColor(60, 60, 65)
+  const notesLines = pdf.splitTextToSize(report.notes?.trim() || 'Aucune remarque.', pageWidth - margin * 2)
+  pdf.text(notesLines, margin, y)
+
+  const footerY = pdf.internal.pageSize.getHeight() - 14
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(7)
+  pdf.setTextColor(...GRAY_TEXT)
+  pdf.text(legalFooterLines(company).join(' — '), pageWidth / 2, footerY, { align: 'center', maxWidth: pageWidth - margin * 2 })
+
+  return Buffer.from(pdf.output('arraybuffer'))
+}

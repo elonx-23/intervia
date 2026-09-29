@@ -4,6 +4,7 @@ import { db, now, uuid } from '../db.mjs'
 import { hashPassword, passwordError } from '../password.mjs'
 import { sendMail } from '../mailer.mjs'
 import { rateLimit } from '../rateLimit.mjs'
+import { wrapEmail, ctaButton, fallbackLink } from '../emailTemplates.mjs'
 
 export const signupRouter = Router()
 
@@ -28,19 +29,15 @@ function publicUrlFor(req) {
 }
 
 function verificationHtml(link) {
-  return `
-    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; color: #1e1e23; max-width: 480px; margin: 0 auto;">
+  return wrapEmail({
+    preheader: 'Confirme ton adresse email pour activer ton compte Intervia.',
+    bodyHtml: `
       <p>Bienvenue sur Intervia !</p>
       <p>Confirme ton adresse email pour activer ton compte.</p>
-      <p style="text-align: center; margin: 28px 0;">
-        <a href="${link}" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-weight: 600; display: inline-block;">Confirmer mon email</a>
-      </p>
-      <p style="color: #6b6b78; font-size: 12px; margin-top: 24px;">
-        Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br />
-        <a href="${link}" style="color: #2563eb;">${link}</a>
-      </p>
-      <p>Ce lien expire dans 24h.</p>
-    </div>`
+      ${ctaButton('Confirmer mon email', link)}
+      ${fallbackLink(link)}
+      <p style="color: #6b6b78; font-size: 12px;">Ce lien expire dans 24h.</p>`,
+  })
 }
 
 async function sendVerificationEmail(req, userId, email) {
@@ -124,18 +121,14 @@ signupRouter.get('/verify/:token', (req, res) => {
 })
 
 function resetPasswordHtml(link) {
-  return `
-    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; color: #1e1e23; max-width: 480px; margin: 0 auto;">
+  return wrapEmail({
+    preheader: 'Réinitialise ton mot de passe Intervia.',
+    bodyHtml: `
       <p>Une demande de réinitialisation de mot de passe a été faite pour ce compte Intervia.</p>
-      <p style="text-align: center; margin: 28px 0;">
-        <a href="${link}" style="background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-weight: 600; display: inline-block;">Choisir un nouveau mot de passe</a>
-      </p>
-      <p style="color: #6b6b78; font-size: 12px; margin-top: 24px;">
-        Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br />
-        <a href="${link}" style="color: #2563eb;">${link}</a>
-      </p>
-      <p>Ce lien expire dans 2h. Si tu n'es pas à l'origine de cette demande, ignore cet email — ton mot de passe reste inchangé.</p>
-    </div>`
+      ${ctaButton('Choisir un nouveau mot de passe', link)}
+      ${fallbackLink(link)}
+      <p style="color: #6b6b78; font-size: 12px;">Ce lien expire dans 2h. Si tu n'es pas à l'origine de cette demande, ignore cet email — ton mot de passe reste inchangé.</p>`,
+  })
 }
 
 // Réponse identique que le compte existe ou non, pour ne pas laisser
