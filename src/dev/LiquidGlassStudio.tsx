@@ -1,6 +1,7 @@
 import * as React from 'react'
 import '@ozcanyldzhn/liquid-glass-js'
 import '@ozcanyldzhn/liquid-glass-js/css'
+import { clearGlassConfig, getGlassConfig, setGlassConfig, type GlassSettings } from './liquidGlassConfig'
 
 // Outil de réglage en direct, dev uniquement (jamais dans le build de
 // production — voir le montage conditionnel dans App.tsx) : "Sélectionner"
@@ -8,29 +9,18 @@ import '@ozcanyldzhn/liquid-glass-js/css'
 // pose par-dessus un calque <liquid-glass> qui suit sa position à l'écran,
 // avec un panneau de réglages en direct façon "Physics Studio" du paquet
 // (mêmes paramètres : moteur, profil de surface, indice de réfraction,
-// épaisseur, lunette, rayon, flou, teinte, spéculaire, ombre). "Copier les
-// réglages" donne un extrait JSX prêt à coller dans le vrai composant une
-// fois les valeurs trouvées — l'objectif n'est pas de garder cet outil en
-// prod, juste de trouver les bons chiffres une fois.
+// épaisseur, lunette, rayon, flou, teinte, spéculaire, ombre).
+//
+// "Appliquer" écrit le réglage dans localStorage (voir liquidGlassConfig.ts)
+// puis recharge la page — les composants réels équipés d'un
+// `data-glass-key` (BottomNav pour l'instant) relisent ce réglage à leur
+// montage et rendent alors le vrai <liquid-glass> au lieu de leur verre CSS
+// habituel. "Copier les réglages" reste dispo en plus, pour me passer les
+// valeurs à la main si besoin.
 
-type Engine = 'svg' | 'webgl'
-type SurfaceFn = 'convex_squircle' | 'convex_circle' | 'concave' | 'lip'
-
-interface Settings {
-  engine: Engine
-  surfaceFn: SurfaceFn
-  ior: number
-  thickness: number
-  bezel: number
-  radius: number
-  blur: number
-  tintColor: string
-  tintOpacity: number
-  specularOpacity: number
-  specularSaturation: number
-  shadowBlur: number
-  shadowSpread: number
-}
+type Engine = GlassSettings['engine']
+type SurfaceFn = GlassSettings['surfaceFn']
+type Settings = GlassSettings
 
 const DEFAULTS: Settings = {
   engine: 'svg',
@@ -100,6 +90,7 @@ function Slider({
 export function LiquidGlassStudio() {
   const [selecting, setSelecting] = React.useState(false)
   const [target, setTarget] = React.useState<HTMLElement | null>(null)
+  const [glassKey, setGlassKey] = React.useState<string | null>(null)
   const [rect, setRect] = React.useState<DOMRect | null>(null)
   const [settings, setSettings] = React.useState<Settings>(DEFAULTS)
   const [copied, setCopied] = React.useState(false)
@@ -107,7 +98,11 @@ export function LiquidGlassStudio() {
   const patch = (p: Partial<Settings>) => setSettings((s) => ({ ...s, ...p }))
 
   // Mode sélection : survol met en évidence, clic choisit la cible (et
-  // empêche son action normale de se déclencher pendant qu'on choisit).
+  // empêche son action normale de se déclencher pendant qu'on choisit). Un
+  // élément qui porte `data-glass-key` (posé sur les composants réels
+  // équipés pour recevoir un réglage appliqué — voir BottomNav.tsx) rend
+  // possible le bouton "Appliquer" ; sans cet attribut sur la cible ou un de
+  // ses parents, l'outil reste utilisable en aperçu/copie seulement.
   React.useEffect(() => {
     if (!selecting) return
     let hovered: HTMLElement | null = null
@@ -124,7 +119,14 @@ export function LiquidGlassStudio() {
       e.preventDefault()
       e.stopPropagation()
       hovered?.style.removeProperty('outline')
+      const keyHolder = el.closest<HTMLElement>('[data-glass-key]')
+      const key = keyHolder?.dataset.glassKey ?? null
       setTarget(el)
+      setGlassKey(key)
+      if (key) {
+        const saved = getGlassConfig(key)
+        if (saved) setSettings(saved)
+      }
       setSelecting(false)
     }
     document.addEventListener('mouseover', onOver, true)
@@ -169,6 +171,21 @@ export function LiquidGlassStudio() {
     await navigator.clipboard.writeText(snippet)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
+  }
+
+  const applySettings = () => {
+    if (!glassKey) return
+    setGlassConfig(glassKey, settings)
+    // Recharge pour que le composant réel (BottomNav) se remonte et relise
+    // le nouveau réglage — plus simple et plus fiable qu'un canal d'events
+    // React à faire traverser toute l'arborescence pour un outil temporaire.
+    location.reload()
+  }
+
+  const removeApplied = () => {
+    if (!glassKey) return
+    clearGlassConfig(glassKey)
+    location.reload()
   }
 
   return (
@@ -258,6 +275,14 @@ export function LiquidGlassStudio() {
           }}
         >
           <div style={{ fontSize: 14, fontWeight: 700 }}>Réglages du verre</div>
+
+          {glassKey ? (
+            <div style={{ fontSize: 11, color: '#a3e635' }}>Cible : {glassKey} (réglages applicables)</div>
+          ) : (
+            <div style={{ fontSize: 11, color: '#f59e0b' }}>
+              Cet élément n'est pas encore équipé pour recevoir un réglage appliqué — aperçu et copie seulement.
+            </div>
+          )}
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {Object.keys(PRESETS).map((name) => (
@@ -367,17 +392,54 @@ export function LiquidGlassStudio() {
 
           <button
             type="button"
+            onClick={applySettings}
+            disabled={!glassKey}
+            style={{
+              background: glassKey ? '#a3e635' : '#374151',
+              color: glassKey ? '#111827' : '#6b7280',
+              border: 'none',
+              borderRadius: 8,
+              padding: '10px 12px',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: glassKey ? 'pointer' : 'not-allowed',
+              marginTop: 4,
+            }}
+          >
+            ✓ Appliquer pour de vrai
+          </button>
+
+          {glassKey && (
+            <button
+              type="button"
+              onClick={removeApplied}
+              style={{
+                background: 'none',
+                color: '#ef4444',
+                border: '1px solid #ef4444',
+                borderRadius: 8,
+                padding: '8px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Retirer le réglage appliqué
+            </button>
+          )}
+
+          <button
+            type="button"
             onClick={copySettings}
             style={{
-              background: '#2563eb',
-              color: '#fff',
+              background: '#1f2937',
+              color: '#e5e7eb',
               border: 'none',
               borderRadius: 8,
               padding: '10px 12px',
               fontSize: 13,
               fontWeight: 600,
               cursor: 'pointer',
-              marginTop: 4,
             }}
           >
             {copied ? '✓ Copié !' : 'Copier les réglages'}

@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth'
 import { useLiquidTouch } from '@/hooks/useLiquidTouch'
 import { createDevis, createFactureDirect } from '@/lib/documents'
 import { cn } from '@/lib/utils'
+import { useDevGlassOverride } from '@/dev/useDevGlassOverride'
 
 const MORPH_DURATION_MS = 500
 
@@ -197,6 +198,12 @@ export function BottomNav() {
   const [createOpen, setCreateOpen] = React.useState(false)
   const [creating, setCreating] = React.useState(false)
   const fab = useLiquidTouch<HTMLButtonElement>()
+  // Réglages trouvés via l'outil dev (src/dev/LiquidGlassStudio.tsx) — null
+  // tant que rien n'a été "Appliqué" (ou en production, où ce hook ne fait
+  // jamais rien). Voir la note dans useDevGlassOverride pour la garantie
+  // que le paquet liquid-glass-js ne charge jamais côté utilisateur final.
+  const navGlass = useDevGlassOverride('bottom-nav')
+  const fabGlass = useDevGlassOverride('fab-button')
 
   const left: NavItem[] = isAdmin
     ? [
@@ -324,20 +331,49 @@ export function BottomNav() {
           transform: 'translateZ(0)',
         }}
       >
-        <nav
-          className="glass-strong bottom-nav-glass pointer-events-auto flex w-full max-w-md items-center justify-between gap-0.5 rounded-[26px] px-2 py-0.5"
-          style={{
-            // @ts-expect-error propriété CSS personnalisée
-            '--elevation-shadow': '0 8px 30px -8px rgba(0,0,0,0.35), 0 2px 8px -2px rgba(0,0,0,0.18)',
-          }}
-        >
-          <NavGroup items={left} pathname={pathname} />
-          {/* Encoche vide au centre — même largeur que le bouton "+" posé
-              par-dessus, fait partie de la même barre continue plutôt que
-              deux pastilles séparées. */}
-          <div className="w-16 shrink-0" aria-hidden="true" />
-          <NavGroup items={right} pathname={pathname} />
-        </nav>
+        {navGlass ? (
+          // Réglage "Appliqué" trouvé (dev uniquement) — vrai <liquid-glass>
+          // à la place de notre verre CSS habituel.
+          <div data-glass-key="bottom-nav" className="pointer-events-auto w-full max-w-md">
+            <liquid-glass
+              engine={navGlass.engine}
+              surface-fn={navGlass.surfaceFn}
+              ior={String(navGlass.ior)}
+              thickness={String(navGlass.thickness)}
+              bezel={String(navGlass.bezel)}
+              radius={String(navGlass.radius)}
+              blur={String(navGlass.blur)}
+              tint-color={navGlass.tintColor}
+              tint-opacity={String(navGlass.tintOpacity)}
+              specular-opacity={String(navGlass.specularOpacity)}
+              specular-saturation={String(navGlass.specularSaturation)}
+              shadow-blur={String(navGlass.shadowBlur)}
+              shadow-spread={String(navGlass.shadowSpread)}
+            >
+              <nav className="flex w-full items-center justify-between gap-0.5 px-2 py-1">
+                <NavGroup items={left} pathname={pathname} />
+                <div className="w-16 shrink-0" aria-hidden="true" />
+                <NavGroup items={right} pathname={pathname} />
+              </nav>
+            </liquid-glass>
+          </div>
+        ) : (
+          <nav
+            data-glass-key="bottom-nav"
+            className="glass-strong bottom-nav-glass pointer-events-auto flex w-full max-w-md items-center justify-between gap-0.5 rounded-[26px] px-2 py-0.5"
+            style={{
+              // @ts-expect-error propriété CSS personnalisée
+              '--elevation-shadow': '0 8px 30px -8px rgba(0,0,0,0.35), 0 2px 8px -2px rgba(0,0,0,0.18)',
+            }}
+          >
+            <NavGroup items={left} pathname={pathname} />
+            {/* Encoche vide au centre — même largeur que le bouton "+" posé
+                par-dessus, fait partie de la même barre continue plutôt que
+                deux pastilles séparées. */}
+            <div className="w-16 shrink-0" aria-hidden="true" />
+            <NavGroup items={right} pathname={pathname} />
+          </nav>
+        )}
       </div>
 
       {/* Conteneur dédié au bouton "+", superposé au même endroit que la
@@ -357,22 +393,47 @@ export function BottomNav() {
               `transform: scale(...)` qui écraserait un `-translate-x-1/2`
               porté par le même élément, faisant sauter le bouton hors de
               l'axe au toucher. */}
-          <div className="pointer-events-none absolute left-1/2 -top-[4.25rem] -translate-x-1/2">
+          <div data-glass-key="fab-button" className="pointer-events-none absolute left-1/2 -top-[4.25rem] -translate-x-1/2">
+            {fabGlass && (
+              <div className="pointer-events-none absolute inset-0">
+                <liquid-glass
+                  width="64"
+                  height="64"
+                  engine={fabGlass.engine}
+                  surface-fn={fabGlass.surfaceFn}
+                  ior={String(fabGlass.ior)}
+                  thickness={String(fabGlass.thickness)}
+                  bezel={String(fabGlass.bezel)}
+                  radius={String(fabGlass.radius)}
+                  blur={String(fabGlass.blur)}
+                  tint-color={fabGlass.tintColor}
+                  tint-opacity={String(fabGlass.tintOpacity)}
+                  specular-opacity={String(fabGlass.specularOpacity)}
+                  specular-saturation={String(fabGlass.specularSaturation)}
+                  shadow-blur={String(fabGlass.shadowBlur)}
+                  shadow-spread={String(fabGlass.shadowSpread)}
+                />
+              </div>
+            )}
             <button
               ref={fab.ref}
               type="button"
               onClick={() => setCreateOpen((o) => !o)}
               disabled={creating}
               aria-label={createOpen ? 'Fermer' : 'Créer'}
-              className="liquid pointer-events-auto flex size-16 items-center justify-center rounded-[1.5rem] text-white disabled:opacity-60"
+              className={cn(
+                'liquid pointer-events-auto relative flex size-16 items-center justify-center rounded-[1.5rem] text-white disabled:opacity-60',
+              )}
               style={{
                 // Plat, net, sans dégradé ni ombre diffuse — un dégradé doux
                 // en superposition ("gloss") ou une ombre à grand rayon de
                 // flou se lisaient comme un halo flou autour du bouton,
                 // signalé à plusieurs reprises. Un simple liseré net de 1px
-                // (pas un dégradé) suffit pour le reflet du haut.
-                backgroundColor: FAB_BLUE,
-                boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.5), 0 3px 8px -2px rgba(0,0,0,0.35)',
+                // (pas un dégradé) suffit pour le reflet du haut. Quand un
+                // réglage liquid-glass est appliqué (calque ci-dessus), le
+                // fond plat devient transparent pour le laisser transparaître.
+                backgroundColor: fabGlass ? 'transparent' : FAB_BLUE,
+                boxShadow: fabGlass ? 'none' : 'inset 0 1px 0 0 rgba(255,255,255,0.5), 0 3px 8px -2px rgba(0,0,0,0.35)',
                 isolation: 'isolate',
               }}
               {...fab.handlers}
