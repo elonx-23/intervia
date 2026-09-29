@@ -8,7 +8,7 @@ import { generateDocumentPdfBuffer } from '../pdf.mjs'
 import { getStripe } from '../stripe.mjs'
 import { broadcast } from '../events.mjs'
 import { rateLimit } from '../rateLimit.mjs'
-import { wrapEmail, ctaButton, fallbackLink } from '../emailTemplates.mjs'
+import { wrapEmail, ctaButton, fallbackLink, fillEmailText, DEFAULT_EMAIL_TEXTS } from '../emailTemplates.mjs'
 
 export const documentsRouter = Router()
 
@@ -218,6 +218,21 @@ documentsRouter.post('/:id/email', externalActionLimiter, async (req, res) => {
         ? 'Consulter la facture'
         : 'Consulter et signer la facture'
 
+  // 4 scénarios distincts (Réglages → Emails) : un devis pas encore signé
+  // n'appelle pas le même texte qu'une facture déjà réglée. Pour une
+  // facture, "acquittée" se base sur le statut de paiement, pas sur la
+  // signature (qui, pour une facture, n'atteste que la remise des travaux —
+  // voir le commentaire sur /:id/sign plus haut).
+  const scenarioKey =
+    doc.kind === 'devis' ? (alreadySigned ? 'devisSigne' : 'devis') : doc.status === 'payee' ? 'factureAcquittee' : 'facture'
+  const emailTexts = { ...DEFAULT_EMAIL_TEXTS, ...(getSetting('emailTexts', doc.team_id) ?? {}) }
+  const introText = fillEmailText(emailTexts[scenarioKey], {
+    numero: doc.number,
+    montant: ttc,
+    client: doc.client_first_name,
+    entreprise: companyName(doc.team_id),
+  })
+
   try {
     const pdfBuffer = generateDocumentPdfBuffer(toApi(doc))
     await sendMail({
@@ -225,7 +240,7 @@ documentsRouter.post('/:id/email', externalActionLimiter, async (req, res) => {
       subject: `Votre ${label} ${companyName(doc.team_id)} — ${doc.number}`,
       html: emailHtml({
         greeting: doc.client_first_name,
-        intro: `Voici votre ${label} <strong>${doc.number}</strong> (${ttc} € TTC), jointe à cet email au format PDF.`,
+        intro: introText,
         ctaLabel,
         ctaLink: link,
       }),

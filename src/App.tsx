@@ -39,6 +39,7 @@ const AccountSettings = React.lazy(() => import('@/pages/settings/AccountSetting
 const BackupSettings = React.lazy(() => import('@/pages/settings/BackupSettings'))
 const CompanySettings = React.lazy(() => import('@/pages/settings/CompanySettings'))
 const ContactSettings = React.lazy(() => import('@/pages/settings/ContactSettings'))
+const EmailTextsSettings = React.lazy(() => import('@/pages/settings/EmailTextsSettings'))
 const IntegrationsSettings = React.lazy(() => import('@/pages/settings/IntegrationsSettings'))
 const NotificationSettings = React.lazy(() => import('@/pages/settings/NotificationSettings'))
 const PrivacySettings = React.lazy(() => import('@/pages/settings/PrivacySettings'))
@@ -118,6 +119,7 @@ function AppRoutes() {
                 <Route path="/clients/:key" element={<ClientDetail />} />
                 <Route path="/paiements" element={<Paiements />} />
                 <Route path="/reglages/entreprise" element={<CompanySettings />} />
+                <Route path="/reglages/emails" element={<EmailTextsSettings />} />
                 <Route path="/reglages/integrations" element={<IntegrationsSettings />} />
                 <Route path="/reglages/region" element={<RegionSettings />} />
                 <Route path="/reglages/securite" element={<SecuritySettings />} />

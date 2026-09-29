@@ -2,6 +2,7 @@ import { Router } from 'express'
 
 import { requireAdmin, requireAuth } from '../auth.mjs'
 import { db, getSetting, setSetting } from '../db.mjs'
+import { DEFAULT_EMAIL_TEXTS } from '../emailTemplates.mjs'
 
 export const settingsRouter = Router()
 settingsRouter.use(requireAuth)
@@ -44,6 +45,22 @@ settingsRouter.patch('/company', requireAdmin, (req, res) => {
     db.prepare('UPDATE teams SET name = ? WHERE id = ?').run(updated.name.trim(), req.caller.team_id)
   }
 
+  res.json(updated)
+})
+
+// Texte du message accompagnant l'envoi d'un devis/facture par email —
+// admin uniquement, un jeu de textes par équipe (comme "company" ci-dessus).
+// 4 scénarios distincts (devis / devis signé / facture / facture acquittée)
+// plutôt qu'un seul texte générique, pour que le ton puisse différer entre
+// "voici votre devis" et "votre facture a bien été réglée".
+settingsRouter.get('/email-texts', (req, res) => {
+  res.json({ ...DEFAULT_EMAIL_TEXTS, ...(getSetting('emailTexts', req.caller.team_id) ?? {}) })
+})
+
+settingsRouter.patch('/email-texts', requireAdmin, (req, res) => {
+  const current = { ...DEFAULT_EMAIL_TEXTS, ...(getSetting('emailTexts', req.caller.team_id) ?? {}) }
+  const updated = { ...current, ...(req.body ?? {}) }
+  setSetting('emailTexts', updated, req.caller.team_id)
   res.json(updated)
 })
 

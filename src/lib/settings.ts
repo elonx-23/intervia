@@ -11,6 +11,21 @@ export async function updateCompanySettings(sessionId: string, data: Partial<Com
   return apiFetch<CompanySettings>('/api/settings/company', { method: 'PATCH', sessionId, body: data })
 }
 
+export interface EmailTexts {
+  devis: string
+  devisSigne: string
+  facture: string
+  factureAcquittee: string
+}
+
+export async function getEmailTexts(sessionId: string) {
+  return apiFetch<EmailTexts>('/api/settings/email-texts', { sessionId })
+}
+
+export async function updateEmailTexts(sessionId: string, data: Partial<EmailTexts>) {
+  return apiFetch<EmailTexts>('/api/settings/email-texts', { method: 'PATCH', sessionId, body: data })
+}
+
 export async function getRegion(sessionId: string) {
   return apiFetch<{ region: string }>('/api/settings/region', { sessionId })
 }

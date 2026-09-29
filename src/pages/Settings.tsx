@@ -1,4 +1,4 @@
-import { Bell, Building2, CreditCard, Database, Globe, Info, LogOut, MessageCircle, ShieldCheck, Sparkles, User, Users } from 'lucide-react'
+import { Bell, Building2, CreditCard, Database, Globe, Info, LogOut, Mail, MessageCircle, ShieldCheck, Sparkles, User, Users } from 'lucide-react'
 import * as React from 'react'
 
 import { SettingsGroupLabel, SettingsRow } from '@/components/SettingsRow'
@@ -67,6 +67,7 @@ export default function Settings() {
             <SettingsGroupLabel>Administration</SettingsGroupLabel>
             <SettingsRow to="/techniciens" icon={Users} label="Techniciens" />
             <SettingsRow to="/reglages/entreprise" icon={Building2} label="Entreprise" />
+            <SettingsRow to="/reglages/emails" icon={Mail} label="Emails" />
             <SettingsRow to="/reglages/integrations" icon={Sparkles} label="Intégrations" />
             <SettingsRow to="/reglages/region" icon={Globe} label="Région" />
             <SettingsRow to="/reglages/sauvegardes" icon={Database} label="Sauvegardes" />
