@@ -106,7 +106,7 @@ function NavGroup({ items, pathname }: { items: NavItem[]; pathname: string }) {
     <div className="relative flex flex-1 items-center gap-0.5">
       {activeIndex >= 0 && (
         <div
-          className={`glass absolute top-0 bottom-0 rounded-full transition-[left,width] duration-500 [transition-timing-function:cubic-bezier(0.34,1.2,0.4,1)] ${morphing ? 'liquid-blob-morph' : ''}`}
+          className={`glass absolute top-0 bottom-0 rounded-[20px] transition-[left,width] duration-500 [transition-timing-function:cubic-bezier(0.34,1.2,0.4,1)] ${morphing ? 'liquid-blob-morph' : ''}`}
           style={{
             left: `calc(${(activeIndex / n) * 100}% + 2px)`,
             width: `calc(${100 / n}% - 4px)`,
@@ -325,7 +325,7 @@ export function BottomNav() {
         }}
       >
         <nav
-          className="glass-strong bottom-nav-glass pointer-events-auto flex w-full max-w-md items-center justify-between gap-0.5 rounded-full px-2 py-0.5"
+          className="glass-strong bottom-nav-glass pointer-events-auto flex w-full max-w-md items-center justify-between gap-0.5 rounded-[26px] px-2 py-0.5"
           style={{
             // @ts-expect-error propriété CSS personnalisée
             '--elevation-shadow': '0 8px 30px -8px rgba(0,0,0,0.35), 0 2px 8px -2px rgba(0,0,0,0.18)',

@@ -135,12 +135,27 @@ function AppRoutes() {
   )
 }
 
+// Import dynamique, jamais statique : garantit que le paquet
+// liquid-glass-js (et l'outil de réglage lui-même) ne sont même pas
+// téléchargés en production, pas juste "rendus conditionnellement" — un
+// import statique s'exécute toujours, même dans une branche jamais
+// affichée. Vite élimine ce bloc entier du build de prod puisque
+// `import.meta.env.DEV` y est remplacé par `false` de façon statique.
+const LiquidGlassStudio = import.meta.env.DEV
+  ? React.lazy(() => import('@/dev/LiquidGlassStudio').then((m) => ({ default: m.LiquidGlassStudio })))
+  : null
+
 function App() {
   return (
     <BrowserRouter>
       <div className="app-backdrop" aria-hidden="true" />
       <LiquidGlassDefs />
       <Splash />
+      {LiquidGlassStudio && (
+        <React.Suspense fallback={null}>
+          <LiquidGlassStudio />
+        </React.Suspense>
+      )}
       <AuthProvider>
         <AppRoutes />
       </AuthProvider>
