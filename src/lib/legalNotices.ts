@@ -53,9 +53,9 @@ Pour les contrats de vente de biens, à moins qu'il ne propose de récupérer lu
     },
     {
       heading: 'Article L221-25',
-      body: `Si le consommateur souhaite que l'exécution d'une prestation de services ou d'un contrat mentionné au premier alinéa de l'article L221-4 commence avant la fin du délai de rétractation prévu à l'article L221-18, le professionnel recueille sa demande expresse par tout moyen pour les contrats conclus à distance et sur support durable pour les contrats conclus hors établissement.
-Lorsque le consommateur exerce son droit de rétractation d'un contrat de prestation de services ou d'un contrat mentionné au premier alinéa de l'article L221-4 dont l'exécution a été demandée, avant la fin du délai de rétractation, le professionnel verse au professionnel un montant correspondant au service fourni jusqu'à la communication de sa décision de se rétracter ; ce montant est proportionné au prix total de la prestation convenu dans le contrat. Si le prix total est excessif, le montant approprié est calculé sur la base de la valeur marchande de ce qui a été fourni.
-Le professionnel n'est pas redevable des frais susmentionnés dans les cas où il n'a pas respecté l'obligation d'information prévue au 4° du I de l'article L221-5.`,
+      body: `Si le consommateur souhaite que l'exécution d'une prestation de services ou d'un contrat mentionné au premier alinéa de l'article L221-4 commence avant la fin du délai de rétractation mentionné à l'article L221-18, le professionnel recueille sa demande expresse par tout moyen pour les contrats conclus à distance et sur papier ou sur support durable pour les contrats conclus hors établissement.
+Le consommateur qui a exercé son droit de rétractation d'un contrat de prestation de services ou d'un contrat mentionné au premier alinéa de l'article L221-4 dont l'exécution a commencé, à sa demande expresse, avant la fin du délai de rétractation verse au professionnel un montant correspondant au service fourni jusqu'à la communication de sa décision de se rétracter ; ce montant est proportionné au prix total de la prestation convenu dans le contrat. Si le prix total est excessif, le montant approprié est calculé sur la base de la valeur marchande de ce qui a été fourni.
+Aucune somme n'est due par le consommateur ayant exercé son droit de rétractation si sa demande expresse n'a pas été recueillie en application du premier alinéa du présent article ou si le professionnel n'a pas respecté l'obligation d'information prévue au 4° du I de l'article L221-5.`,
     },
     {
       heading: 'Article L221-27',
@@ -122,21 +122,22 @@ Ces informations doivent être aisément accessibles pour tout espace de communi
     },
     {
       heading: 'Article 4',
-      body: `I. — Préalablement à l'exécution de toute prestation visée à l'article 1er, conclue en établissement commercial ou à distance, le professionnel remet au client un devis ou établissement commercial, le professionnel remet au client, un ordre de réparation, outre les mentions prévues par le code de la consommation, les mentions suivantes :
+      body: `I. — Préalablement à l'exécution de toute prestation visée à l'article 1er, conclue en établissement commercial, le professionnel remet au client un devis détaillé, qui comporte, outre les mentions des articles L111-1 et L111-2 du code de la consommation, les mentions suivantes :
 — la date de rédaction ;
 — le nom et l'adresse de l'entreprise ;
 — le nom du client ;
 — le lieu d'exécution de l'opération ;
 — la nature exacte des réparations à effectuer ;
-— le décompte détaillé, en quantité et en prix, de chaque produit et matériel nécessaire à l'opération prévue (dénomination, prix unitaire et désignation de l'unité à laquelle il s'applique, notamment l'heure de main-d'œuvre, le mètre linéaire ou le mètre carré) et la durée de l'intervention ;
+— le décompte détaillé, en quantité et en prix, de chaque prestation et produit nécessaire à l'opération prévue : dénomination, prix unitaire et désignation de l'unité à laquelle il s'applique (notamment l'heure de main-d'œuvre, le mètre linéaire ou le mètre carré) et la quantité prévue ;
 — le cas échéant, les frais de déplacement ;
 — la somme globale à payer hors taxes et toutes taxes comprises, en précisant le taux de TVA ;
 — la durée de validité de l'offre ;
 — l'indication du caractère payant ou gratuit du devis.
-II. — Lorsque le contrat est conclu hors établissement au sens de l'article L. 221-1, le devis détaillé remis au client, en sus des mentions des articles L. 221-5 et L. 221-9 du code de la consommation. Pour l'application de l'article L. 111-1 (2°) relatif à l'obligation d'information sur le prix, le devis détaillé remis au client vaut prix, et il comporte :
-— le décompte détaillé, en quantité et en prix, de chaque produit et prestation, en précisant le taux horaire de main-d'œuvre et le temps estimé, ainsi que la dénomination des produits et matériels ainsi que leur prix unitaire ainsi que la désignation de l'unité à laquelle il s'applique et la quantité prévue ;
+II. — Lorsque le contrat est conclu hors établissement au sens de l'article L221-1, le devis détaillé revêt la forme du contrat déterminée aux articles L221-5 et L221-9 du code de la consommation. Pour l'application de l'article L111-1 (2°) relatif à l'information sur les prix, il comporte :
+— le décompte détaillé, en quantité et en prix, de chaque prestation, en particulier le taux horaire de main d'œuvre et le temps estimé ou, le cas échéant, le montant forfaitaire de chaque prestation ;
+— la dénomination des produits et matériels nécessaires à l'opération prévue et leur prix unitaire ainsi que, le cas échéant, la désignation de l'unité à laquelle il s'applique et la quantité prévue ;
 — le cas échéant, les frais de déplacement.
-III. — Dans le devis visé au I précédent et dans le devis conclu hors établissement visé au II précédent, le consommateur doit être informé qu'il peut conserver les pièces, les éléments ou appareils remplacés. Cette information s'effectue selon un modèle-type figurant en annexe du présent arrêté.`,
+III. — Dans le devis visé au I précité ou dans le contrat conclu hors établissement commercial visé au II précité, le consommateur doit être informé qu'il peut conserver les pièces, les éléments ou appareils remplacés. Cette information s'effectue selon un modèle-type figurant en annexe du présent arrêté.`,
     },
     {
       heading: 'Article 5',
@@ -162,3 +163,113 @@ III. — Dans le devis visé au I précédent et dans le devis conclu hors étab
 }
 
 export const LEGAL_DOCUMENTS: LegalDocument[] = [CODE_CONSOMMATION, ARRETE_DEPANNAGE_2017]
+
+// Grille tarifaire publique des forfaits — l'affichage de ces tarifs est une
+// obligation de l'arrêté du 24 janvier 2017 ci-dessus (article 2 : "le
+// professionnel communique [...] par voie d'affichage [...]"), pas une
+// simple information commerciale. Montants HT, le PDF/devis applique
+// ensuite le taux de TVA réel (10% travaux d'amélioration dans un logement
+// de plus de 2 ans, 20% sinon).
+export interface TariffRow {
+  label: string
+  ht: number
+  tva10: number
+  tva20: number
+}
+
+export interface TariffSection {
+  category: string
+  rows: TariffRow[]
+}
+
+export const TARIFF_GRID: TariffSection[] = [
+  {
+    category: 'Tarification générale',
+    rows: [
+      { label: 'Déplacement', ht: 95, tva10: 104.5, tva20: 114 },
+      { label: 'Déplacement en urgence', ht: 140, tva10: 154, tva20: 168 },
+      { label: "Main d'œuvre", ht: 90, tva10: 99, tva20: 108 },
+      { label: 'Devis payant (valable 1 mois)', ht: 60, tva10: 66, tva20: 72 },
+      { label: "Forfait mise en sécurité pour tous types d'intervention", ht: 400, tva10: 440, tva20: 480 },
+    ],
+  },
+  {
+    category: 'Serrurerie',
+    rows: [
+      { label: 'Ouverture de porte si remplacement de serrure', ht: 390, tva10: 429, tva20: 468 },
+      { label: 'Ouverture de porte sans remplacement de serrure', ht: 590, tva10: 649, tva20: 708 },
+      { label: 'Blindage de porte', ht: 790, tva10: 869, tva20: 948 },
+      { label: 'Fermeture provisoire', ht: 380, tva10: 418, tva20: 456 },
+      { label: 'Réglage / rabotage de porte', ht: 225, tva10: 247.5, tva20: 270 },
+      { label: 'Entretien serrure - porte - poignée', ht: 140, tva10: 154, tva20: 168 },
+      { label: 'Pivot de sécurité', ht: 770, tva10: 847, tva20: 924 },
+      { label: "Main d'œuvre interphone", ht: 250, tva10: 275, tva20: 300 },
+    ],
+  },
+  {
+    category: 'Chauffage',
+    rows: [
+      { label: 'Remise en route ou recherche de panne chaudière', ht: 200, tva10: 220, tva20: 240 },
+      { label: 'Réparation fuite de radiateur', ht: 300, tva10: 330, tva20: 360 },
+      { label: 'Changement de résistance chauffe-eau', ht: 190, tva10: 209, tva20: 228 },
+      { label: 'Installation chaudière gaz individuelle murale', ht: 680, tva10: 748, tva20: 816 },
+    ],
+  },
+  {
+    category: 'Plomberie / Assainissement',
+    rows: [
+      { label: 'Réparation de fuite (soudures, jointures, filasse)', ht: 300, tva10: 330, tva20: 360 },
+      { label: 'Recherche de fuite', ht: 200, tva10: 220, tva20: 240 },
+      { label: 'Passage caméra dans canalisation', ht: 350, tva10: 385, tva20: 420 },
+      { label: 'Dégorgement haute pression / camion pompe', ht: 700, tva10: 770, tva20: 840 },
+      { label: 'Curage 10 mètres linéaires', ht: 300, tva10: 330, tva20: 360 },
+      { label: 'Dégorgement domestique à la canne', ht: 440, tva10: 484, tva20: 528 },
+      { label: 'Dégorgement domestique à la pompe', ht: 390, tva10: 429, tva20: 468 },
+      { label: 'Dégorgement furet manuel', ht: 390, tva10: 429, tva20: 468 },
+      { label: 'Dégorgement furet électrique', ht: 580, tva10: 638, tva20: 696 },
+      { label: 'Pompage eau fosse septique (par m³)', ht: 700, tva10: 770, tva20: 840 },
+      { label: "Bouteille d'acide", ht: 140, tva10: 154, tva20: 168 },
+    ],
+  },
+  {
+    category: 'Électricité',
+    rows: [
+      { label: 'Recherche de panne / remise en route du courant', ht: 200, tva10: 220, tva20: 240 },
+      { label: 'Disjoncteur 10A à 20A monophasé', ht: 125, tva10: 137.5, tva20: 150 },
+      { label: 'Disjoncteur 32A monophasé', ht: 140, tva10: 154, tva20: 168 },
+      { label: 'Interrupteur différentiel type A ou AC, monophasé', ht: 500, tva10: 550, tva20: 600 },
+      { label: 'Disjoncteur triphasé (tout ampérage)', ht: 630, tva10: 693, tva20: 756 },
+      { label: 'Disjoncteur triphasé différentiel (tout ampérage)', ht: 800, tva10: 880, tva20: 960 },
+      { label: 'Barrette de pontage cuivre', ht: 50, tva10: 55, tva20: 60 },
+      { label: 'Petites fournitures électriques (dominos, câbles)', ht: 50, tva10: 55, tva20: 60 },
+    ],
+  },
+  {
+    category: 'Porte de garage / Volet roulant',
+    rows: [
+      { label: 'Réparation de porte de garage', ht: 460, tva10: 506, tva20: 552 },
+      { label: 'Réglages porte de garage', ht: 330, tva10: 363, tva20: 396 },
+      { label: 'Dépose et installation porte de garage (2 techniciens)', ht: 750, tva10: 825, tva20: 900 },
+      { label: 'Installation volet roulant', ht: 340, tva10: 374, tva20: 408 },
+    ],
+  },
+  {
+    category: 'Coffre-fort',
+    rows: [
+      { label: 'Entretien de coffre-fort', ht: 390, tva10: 429, tva20: 468 },
+      { label: 'Remplacement de la combinaison à code', ht: 490, tva10: 539, tva20: 588 },
+      { label: 'Ouverture fine sans abîmer le mécanisme', ht: 790, tva10: 869, tva20: 948 },
+      { label: "Perçage haute précision d'un mécanisme", ht: 400, tva10: 440, tva20: 480 },
+      { label: 'Enlèvement de coffre-fort', ht: 150, tva10: 165, tva20: 180 },
+    ],
+  },
+]
+
+export const TARIFF_GRID_NOTES = `Pour tout autre forfait ou prestation non représenté sur cette grille tarifaire, un devis personnalisé est remis avant intervention.
+Tous les forfaits incluent 1h de main d'œuvre, ainsi que l'outillage professionnel nécessaire à la prestation pour 1 technicien, hors frais de déplacement. Cette heure de main d'œuvre incluse ne s'applique que sur les forfaits, à l'exclusion de toute autre prestation. Toute heure entamée est due.
+Majoration de 100 % en semaine entre 19h et 6h, ainsi que les week-ends et jours fériés.
+Tout débouchage de canalisation est garanti 7 jours. Intervention garantie 6 mois pièces et main d'œuvre, sauf dégorgement.
+L'ouverture de porte ne garantit pas le bon état de la serrure, de la porte ni du bâti de la porte.
+Les services après-vente sont assurés sous 96h. Réponse du service après-vente : 2 à 4 semaines par courrier.
+Paiement par chèque accepté jusqu'à 100 euros.
+En cas d'intervention d'une tierce personne ou d'une autre entreprise sur notre intervention, la garantie est immédiatement annulée.`
