@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { EmptyState } from '@/components/layout/EmptyState'
+import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { useAuth } from '@/lib/auth'
 import { useLiveEvents } from '@/hooks/useLiveEvents'
@@ -168,7 +169,7 @@ export default function Interventions() {
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         {interventions === null && !error && (
-          <p className="py-8 text-center text-sm text-muted-foreground">Chargement…</p>
+          <Loader className="py-8" />
         )}
 
         {interventions !== null && filtered.length === 0 && (

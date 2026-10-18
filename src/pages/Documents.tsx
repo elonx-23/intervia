@@ -2,6 +2,7 @@ import { ClipboardList, Search, X } from 'lucide-react'
 import * as React from 'react'
 import { Link } from 'react-router-dom'
 
+import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { EmptyState } from '@/components/layout/EmptyState'
 import { SwipeToDelete, SwipeToDeleteGroup } from '@/components/SwipeToDelete'
@@ -254,7 +255,7 @@ export function Documents({ kind }: { kind: DocumentKind }) {
         )}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
-        {docs === null && !error && <p className="py-8 text-center text-sm text-muted-foreground">Chargement…</p>}
+        {docs === null && !error && <Loader className="py-8" />}
         {filtered !== null && filtered.length === 0 && <EmptyState label="Aucun document" />}
 
         <SwipeToDeleteGroup>

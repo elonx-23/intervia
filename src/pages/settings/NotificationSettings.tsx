@@ -2,6 +2,7 @@ import * as React from 'react'
 
 import { Card, CardContent } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
+import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { useAuth } from '@/lib/auth'
 import { friendlyError } from '@/lib/errors'
@@ -68,7 +69,7 @@ export default function NotificationSettings() {
           Choisis les notifications que tu veux recevoir, en push comme dans la liste.
         </p>
         {error && <p className="text-sm text-destructive">{error}</p>}
-        {!prefs && !error && <p className="py-6 text-center text-sm text-muted-foreground">Chargement…</p>}
+        {!prefs && !error && <Loader className="py-6" />}
         {prefs && (
           <div className="flex flex-col gap-2">
             {Object.entries(prefs).map(([type, enabled]) => {

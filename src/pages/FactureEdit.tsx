@@ -10,6 +10,7 @@ import { DocumentHistory } from '@/components/DocumentHistory'
 import { DocumentPdfViewer } from '@/components/DocumentPdfViewer'
 import { ItemLabelField } from '@/components/ItemLabelField'
 import { LegalClausesCard } from '@/components/LegalClausesCard'
+import { Loader } from '@/components/Loader'
 import { PhotoUploader } from '@/components/PhotoUploader'
 import { SendFab } from '@/components/SendFab'
 import { SignOnDeviceDialog } from '@/components/SignOnDeviceDialog'
@@ -199,7 +200,7 @@ export default function FactureEdit() {
   if (!doc) {
     return (
       <div className="flex-1 px-4 pt-24">
-        <p className="py-8 text-center text-sm text-muted-foreground">Chargement…</p>
+        <Loader className="py-8" />
       </div>
     )
   }

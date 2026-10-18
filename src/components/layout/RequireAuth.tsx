@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Navigate, Outlet } from 'react-router-dom'
 
+import { Loader } from '@/components/Loader'
 import { useAuth } from '@/lib/auth'
 
 // RequireAuth s'exécute sur CHAQUE écran authentifié (il enveloppe
@@ -14,7 +15,7 @@ const NoTeamYet = React.lazy(() => import('@/pages/NoTeamYet'))
 const TeamSuspended = React.lazy(() => import('@/pages/TeamSuspended'))
 
 function Fallback() {
-  return <div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">Chargement…</div>
+  return <Loader className="min-h-[50vh]" />
 }
 
 export function RequireAuth() {

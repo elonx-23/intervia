@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { useAuth } from '@/lib/auth'
 import { friendlyError } from '@/lib/errors'
@@ -70,7 +71,7 @@ export default function EmailTextsSettings() {
           automatiquement à l'envoi.
         </p>
 
-        {!loaded && !error && <p className="py-4 text-center text-sm text-muted-foreground">Chargement…</p>}
+        {!loaded && !error && <Loader className="py-4" />}
 
         {loaded &&
           FIELDS.map(({ key, label, hint }) => (

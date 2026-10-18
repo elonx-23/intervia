@@ -29,6 +29,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { useAuth } from '@/lib/auth'
 import { friendlyError } from '@/lib/errors'
@@ -180,7 +181,7 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {!stats && !error && <p className="py-6 text-center text-sm text-muted-foreground">Chargement…</p>}
+        {!stats && !error && <Loader className="py-6" />}
 
         {stats && (
           <>

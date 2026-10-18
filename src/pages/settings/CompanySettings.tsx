@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { apiUpload } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -91,7 +92,7 @@ export default function CompanyEditSettings() {
           Ces informations apparaissent sur tous les devis et factures générés (PDF, mentions légales).
         </p>
 
-        {!loaded && !error && <p className="py-4 text-center text-sm text-muted-foreground">Chargement…</p>}
+        {!loaded && !error && <Loader className="py-4" />}
 
         {loaded && (
           <Card>

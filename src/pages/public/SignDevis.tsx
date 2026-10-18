@@ -2,6 +2,7 @@ import { Printer, Signature } from 'lucide-react'
 import * as React from 'react'
 import { useParams } from 'react-router-dom'
 
+import { Loader } from '@/components/Loader'
 import { PublicSignatureDialog } from '@/components/PublicSignatureDialog'
 import { Button } from '@/components/ui/button'
 import { getDocumentByToken, type PseDocument } from '@/lib/documents'
@@ -62,7 +63,7 @@ export default function SignDevis() {
   if (!doc) {
     return (
       <div className="mx-auto flex min-h-svh w-full max-w-lg items-center justify-center px-4 text-center">
-        <p className="text-sm text-muted-foreground">Chargement…</p>
+        <Loader />
       </div>
     )
   }

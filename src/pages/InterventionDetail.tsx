@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/layout/EmptyState'
 import { ErrorState } from '@/components/layout/ErrorState'
+import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { useAuth } from '@/lib/auth'
 import { useLiveEvents } from '@/hooks/useLiveEvents'
@@ -137,7 +138,7 @@ export default function InterventionDetail() {
   if (!intervention) {
     return (
       <Page title="Fiche intervention">
-        <p className="py-8 text-center text-sm text-muted-foreground">Chargement…</p>
+        <Loader className="py-8" />
       </Page>
     )
   }

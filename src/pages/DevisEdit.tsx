@@ -10,6 +10,7 @@ import { DocumentHistory } from '@/components/DocumentHistory'
 import { DocumentPdfViewer } from '@/components/DocumentPdfViewer'
 import { ItemLabelField } from '@/components/ItemLabelField'
 import { LegalClausesCard } from '@/components/LegalClausesCard'
+import { Loader } from '@/components/Loader'
 import { PhotoUploader } from '@/components/PhotoUploader'
 import { SendFab } from '@/components/SendFab'
 import { SignOnDeviceDialog } from '@/components/SignOnDeviceDialog'
@@ -194,7 +195,7 @@ export default function DevisEdit() {
   if (!doc) {
     return (
       <div className="flex-1 px-4 pt-24">
-        <p className="py-8 text-center text-sm text-muted-foreground">Chargement…</p>
+        <Loader className="py-8" />
       </div>
     )
   }
@@ -297,7 +298,11 @@ export default function DevisEdit() {
     try {
       await flushPendingSave()
       const facture = await convertDevisToFacture(session.sessionId, doc.id)
-      navigate(`/factures/${facture.id}/modifier`)
+      // replace: true — la facture remplace le devis dans l'historique au
+      // lieu de s'empiler dessus, sinon "retour" ramène sur un devis qui
+      // n'existe plus vraiment en tant que tel (converti), et il faut
+      // "retour" deux fois pour revenir à l'écran d'avant.
+      navigate(`/factures/${facture.id}/modifier`, { replace: true })
     } catch (e) {
       setError(friendlyError(e, 'Erreur.'))
       setConverting(false)

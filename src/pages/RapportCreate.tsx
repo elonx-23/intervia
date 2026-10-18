@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/layout/EmptyState'
+import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { useAuth } from '@/lib/auth'
 import { friendlyError } from '@/lib/errors'
@@ -91,7 +92,7 @@ export default function RapportCreate() {
               />
             </div>
             {interventions === null && !error && (
-              <p className="py-8 text-center text-sm text-muted-foreground">Chargement…</p>
+              <Loader className="py-8" />
             )}
             {interventions !== null && filtered.length === 0 && <EmptyState label="Aucune fiche trouvée" />}
             <div className="flex flex-col gap-2">

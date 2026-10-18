@@ -4,6 +4,7 @@ import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/layout/EmptyState'
+import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { useAuth } from '@/lib/auth'
 import { friendlyError } from '@/lib/errors'
@@ -85,7 +86,7 @@ export default function Notifications() {
         )}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
-        {items === null && !error && <p className="py-8 text-center text-sm text-muted-foreground">Chargement…</p>}
+        {items === null && !error && <Loader className="py-8" />}
         {items !== null && items.length === 0 && <EmptyState label="Aucune notification" />}
 
         {groups.map(([label, list]) => (

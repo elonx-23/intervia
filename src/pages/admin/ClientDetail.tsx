@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { EmptyState } from '@/components/layout/EmptyState'
 import { ErrorState } from '@/components/layout/ErrorState'
+import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -65,7 +66,7 @@ export default function ClientDetail() {
   if (!client) {
     return (
       <Page title="Client">
-        <p className="py-8 text-center text-sm text-muted-foreground">Chargement…</p>
+        <Loader className="py-8" />
       </Page>
     )
   }
@@ -98,7 +99,7 @@ export default function ClientDetail() {
 
         <p className="text-sm font-medium text-muted-foreground">Historique</p>
 
-        {documents === null && <p className="py-4 text-center text-sm text-muted-foreground">Chargement…</p>}
+        {documents === null && <Loader className="py-4" />}
         {documents !== null && documents.length === 0 && <EmptyState label="Aucun document" />}
 
         <div className="flex flex-col gap-2">

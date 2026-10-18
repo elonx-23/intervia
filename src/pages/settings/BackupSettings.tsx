@@ -3,6 +3,7 @@ import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { EmptyState } from '@/components/layout/EmptyState'
 import { useAuth } from '@/lib/auth'
@@ -73,7 +74,7 @@ export default function BackupSettings() {
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        {!backups && !error && <p className="py-6 text-center text-sm text-muted-foreground">Chargement…</p>}
+        {!backups && !error && <Loader className="py-6" />}
 
         {backups && backups.length === 0 && <EmptyState label="Aucune sauvegarde pour le moment" />}
 

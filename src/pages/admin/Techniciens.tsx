@@ -3,6 +3,7 @@ import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { useAuth } from '@/lib/auth'
 import { friendlyError } from '@/lib/errors'
@@ -100,7 +101,7 @@ export default function Techniciens() {
         )}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
-        {list === null && !error && <p className="py-8 text-center text-sm text-muted-foreground">Chargement…</p>}
+        {list === null && !error && <Loader className="py-8" />}
         {list?.length === 0 && (
           <p className="py-8 text-center text-sm text-muted-foreground">
             Aucun technicien pour l'instant — partage le code ci-dessus pour en inviter un.

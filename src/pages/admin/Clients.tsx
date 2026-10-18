@@ -3,6 +3,7 @@ import * as React from 'react'
 import { Link } from 'react-router-dom'
 
 import { EmptyState } from '@/components/layout/EmptyState'
+import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -58,7 +59,7 @@ export default function Clients() {
         )}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
-        {clients === null && !error && <p className="py-8 text-center text-sm text-muted-foreground">Chargement…</p>}
+        {clients === null && !error && <Loader className="py-8" />}
         {filtered !== null && filtered.length === 0 && <EmptyState label="Aucun client" />}
 
         <div className="flex flex-col gap-2">

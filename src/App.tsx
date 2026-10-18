@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { RequireAuth } from '@/components/layout/RequireAuth'
 import { LiquidGlassDefs } from '@/components/LiquidGlassDefs'
+import { Loader } from '@/components/Loader'
 import { Splash } from '@/components/Splash'
 import { AuthProvider, useAuth } from '@/lib/auth'
 
@@ -59,7 +60,7 @@ const ViewFacture = React.lazy(() => import('@/pages/public/ViewFacture'))
 // bascule de route étant déjà quasi instantanée en local/4G, ce n'est visible
 // qu'une fraction de seconde ; pas la peine d'un skeleton par page.
 function RouteFallback() {
-  return <div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">Chargement…</div>
+  return <Loader className="min-h-[50vh]" />
 }
 
 function HomeRoute() {

@@ -2,6 +2,7 @@ import { Eraser } from 'lucide-react'
 import * as React from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 
+import { Loader } from '@/components/Loader'
 import { SignaturePad, type SignaturePadHandle } from '@/components/SignaturePad'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -57,7 +58,7 @@ export default function ViewFacture() {
   if (!doc) {
     return (
       <div className="mx-auto flex min-h-svh w-full max-w-lg items-center justify-center px-4 text-center">
-        <p className="text-sm text-muted-foreground">Chargement…</p>
+        <Loader />
       </div>
     )
   }
