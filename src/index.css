@@ -287,16 +287,6 @@
     background-image: radial-gradient(130% 130% at 10% -20%, oklch(1 0 0 / 25%), transparent 45%);
   }
 
-  /* Barre de navigation du bas : un peu plus transparente que le verre
-     "fort" standard, pour mieux laisser deviner le contenu qui défile
-     derrière — même matériau, juste un fond moins opaque. */
-  .bottom-nav-glass {
-    background-color: oklch(0.97 0.025 259 / 52%);
-  }
-  .dark .bottom-nav-glass {
-    background-color: oklch(0.19 0.02 260 / 42%);
-  }
-
 }
 
 /* Matériau "verre liquide" interactif — piloté en temps réel par la position

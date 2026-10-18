@@ -1,3 +1,6 @@
+import '@ozcanyldzhn/liquid-glass-js'
+import '@ozcanyldzhn/liquid-glass-js/css'
+
 import { ClipboardList, FileText, LayoutDashboard, LineChart, Plus, Receipt, X } from 'lucide-react'
 import type { ComponentType } from 'react'
 import * as React from 'react'
@@ -197,6 +200,27 @@ export function BottomNav() {
   const [createOpen, setCreateOpen] = React.useState(false)
   const [creating, setCreating] = React.useState(false)
   const fab = useLiquidTouch<HTMLButtonElement>()
+
+  // <liquid-glass> ne se dimensionne pas tout seul via CSS (absolute
+  // inset-0 sur son propre calque ne suffit pas, son shadow DOM fixe sa
+  // propre position/display en JS) — il lui faut des attributs width/height
+  // explicites. On les mesure sur le calque de fond (jamais sur le <nav>
+  // dynamique) via ResizeObserver, qui ne se déclenche qu'à un vrai
+  // changement de taille (rotation, redimensionnement) — jamais à chaque
+  // changement de route/pastille active — donc le verre n'a toujours aucune
+  // raison de se redessiner en dehors de ça.
+  const barShellRef = React.useRef<HTMLDivElement>(null)
+  const [barSize, setBarSize] = React.useState({ width: 0, height: 0 })
+  React.useEffect(() => {
+    const el = barShellRef.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect
+      setBarSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }))
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
   const left: NavItem[] = isAdmin
     ? [
         { to: '/', label: 'Accueil', icon: LayoutDashboard, end: true },
@@ -323,20 +347,48 @@ export function BottomNav() {
           transform: 'translateZ(0)',
         }}
       >
-        <nav
-          className="glass-strong bottom-nav-glass pointer-events-auto flex w-full max-w-md items-center justify-between gap-0.5 rounded-[26px] px-2 py-0.5"
-          style={{
-            // @ts-expect-error propriété CSS personnalisée
-            '--elevation-shadow': '0 8px 30px -8px rgba(0,0,0,0.35), 0 2px 8px -2px rgba(0,0,0,0.18)',
-          }}
-        >
-          <NavGroup items={left} pathname={pathname} />
-          {/* Encoche vide au centre — même largeur que le bouton "+" posé
-              par-dessus, fait partie de la même barre continue plutôt que
-              deux pastilles séparées. */}
-          <div className="w-16 shrink-0" aria-hidden="true" />
-          <NavGroup items={right} pathname={pathname} />
-        </nav>
+        {/* Essai : deux calques séparés plutôt qu'un seul <nav> qui porte
+            à la fois le verre ET tout ce qui bouge dedans (pastille active,
+            icônes qui changent de couleur, ré-affichages à chaque
+            navigation). Hypothèse sur la cause du bug précédent (cartes du
+            tableau de bord qui se vidaient) : le paquet recapture son
+            arrière-plan à chaque changement dans SON PROPRE sous-arbre React
+            — en ne lui laissant plus AUCUN enfant qui change jamais (juste
+            un calque de fond vide, absolute inset-0), il n'a plus jamais de
+            raison de se redéclencher. Le vrai <nav> interactif est un calque
+            SÉPARÉ, simplement posé par-dessus, jamais enfant de
+            <liquid-glass>. */}
+        <div ref={barShellRef} className="relative w-full max-w-md">
+          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[26px]">
+            {barSize.width > 0 && barSize.height > 0 ? (
+              <liquid-glass
+                engine="svg"
+                surface-fn="convex_squircle"
+                width={String(Math.round(barSize.width))}
+                height={String(Math.round(barSize.height))}
+                ior="1.65"
+                thickness="40"
+                bezel="25"
+                radius="72"
+                blur="0"
+                tint-color="#ffffff"
+                tint-opacity="8"
+                specular-opacity="0.7"
+                specular-saturation="5"
+                shadow-blur="30"
+                shadow-spread="-8"
+              />
+            ) : null}
+          </div>
+          <nav className="relative pointer-events-auto flex w-full items-center justify-between gap-0.5 rounded-[26px] px-2 py-0.5">
+            <NavGroup items={left} pathname={pathname} />
+            {/* Encoche vide au centre — même largeur que le bouton "+" posé
+                par-dessus, fait partie de la même barre continue plutôt que
+                deux pastilles séparées. */}
+            <div className="w-16 shrink-0" aria-hidden="true" />
+            <NavGroup items={right} pathname={pathname} />
+          </nav>
+        </div>
       </div>
 
       {/* Conteneur dédié au bouton "+", superposé au même endroit que la
