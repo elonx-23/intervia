@@ -50,12 +50,19 @@ export function isMailerConfigured() {
   return !!getTransporter()
 }
 
-export async function sendMail({ to, subject, html, attachments }) {
+// fromName permet d'afficher la raison sociale de l'équipe émettrice (ex.
+// "OREL SERVICE") plutôt que toujours "Intervia" — l'adresse technique
+// (no-reply@intervia.info, seule signée DKIM) ne change jamais, seul le nom
+// affiché avant le "<...>" change, exactement comme MAIL_FROM le fait déjà
+// pour "Intervia" par défaut.
+export async function sendMail({ to, subject, html, attachments, fromName }) {
   const t = getTransporter()
   if (!t) {
     throw new Error(
       "Email non configuré côté serveur (SMTP_HOST / SMTP_USER / SMTP_PASSWORD manquants dans server/.env).",
     )
   }
-  await t.sendMail({ from: process.env.MAIL_FROM ?? process.env.SMTP_USER, to, subject, html, attachments })
+  const defaultFrom = process.env.MAIL_FROM ?? process.env.SMTP_USER
+  const from = fromName ? `"${fromName.replace(/"/g, "'")}" <${process.env.SMTP_USER}>` : defaultFrom
+  await t.sendMail({ from, to, subject, html, attachments })
 }

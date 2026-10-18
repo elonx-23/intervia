@@ -1,6 +1,6 @@
 import cron from 'node-cron'
 
-import { db, now, uuid } from './db.mjs'
+import { db, getSetting, now, uuid } from './db.mjs'
 import { sendMail } from './mailer.mjs'
 import { runScheduledBackup } from './backup.mjs'
 import { deliverPendingPush } from './push.mjs'
@@ -96,6 +96,7 @@ async function runAutoRelances() {
       })
       await sendMail({
         to: doc.email,
+        fromName: getSetting('company', doc.team_id)?.name || 'Intervia',
         subject: `Rappel — Facture ${doc.number} en attente de paiement`,
         html: wrapEmail({
           preheader: `Facture ${doc.number} en attente de paiement (${ttc} € TTC).`,

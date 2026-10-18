@@ -85,7 +85,7 @@ function legalClauses(company) {
     },
     {
       title: 'Modalités de paiement',
-      body: `Sauf mention contraire, le règlement est dû à réception de la facture. ${company.name} accepte les paiements par espèces, carte bancaire, virement ou chèque.`,
+      body: `Sauf mention contraire, le règlement est dû à réception de la facture. ${company.name} accepte les paiements par espèces, carte bancaire ou virement ; le paiement par chèque est accepté jusqu'à 100 €. Toute intervention réalisée en semaine entre 19h et 6h, ainsi que les week-ends et jours fériés, fait l'objet d'une majoration de 100 %.`,
     },
     {
       title: 'Pénalités de retard',
@@ -93,7 +93,11 @@ function legalClauses(company) {
     },
     {
       title: 'Garantie',
-      body: `Les pièces et équipements posés bénéficient de la garantie du fabricant. La main d'œuvre est garantie contre tout défaut d'installation pendant une durée raisonnable après intervention, sur présentation de la facture.`,
+      body: `L'intervention est garantie 6 mois, pièces et main d'œuvre, sauf dégorgement (garanti 7 jours). Une ouverture de porte ne garantit pas le bon état de la serrure, de la porte ni du bâti de la porte. L'intervention d'une tierce personne ou d'une autre entreprise sur les travaux réalisés annule immédiatement la garantie.`,
+    },
+    {
+      title: 'Service après-vente',
+      body: `Les demandes de service après-vente sont prises en charge sous 96h. Une réponse écrite est apportée sous 2 à 4 semaines.`,
     },
     {
       title: 'Responsabilité',

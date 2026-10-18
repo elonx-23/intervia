@@ -174,6 +174,7 @@ documentsRouter.post('/:id/relance', externalActionLimiter, async (req, res) => 
     const pdfBuffer = generateDocumentPdfBuffer(toApi(doc))
     await sendMail({
       to: doc.email,
+      fromName: companyName(doc.team_id),
       subject: `Rappel — Facture ${doc.number} en attente de paiement`,
       html: emailHtml({
         greeting: doc.client_first_name,
@@ -236,6 +237,7 @@ documentsRouter.post('/:id/email', externalActionLimiter, async (req, res) => {
     const pdfBuffer = generateDocumentPdfBuffer(toApi(doc))
     await sendMail({
       to: doc.email,
+      fromName: companyName(doc.team_id),
       subject: `Votre ${label} ${companyName(doc.team_id)} — ${doc.number}`,
       html: emailHtml({
         greeting: doc.client_first_name,

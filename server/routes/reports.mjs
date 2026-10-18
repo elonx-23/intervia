@@ -1,6 +1,6 @@
 import { Router } from 'express'
 
-import { db, now, uuid } from '../db.mjs'
+import { db, getSetting, now, uuid } from '../db.mjs'
 import { requireAuth } from '../auth.mjs'
 import { sendMail } from '../mailer.mjs'
 import { generateReportPdfBuffer } from '../pdf.mjs'
@@ -113,6 +113,7 @@ reportsRouter.post('/:id/email', emailLimiter, async (req, res) => {
     const pdfBuffer = generateReportPdfBuffer({ report, intervention, technicienName })
     await sendMail({
       to: email,
+      fromName: getSetting('company', intervention.team_id)?.name || 'Intervia',
       subject: `Rapport d'intervention — ${intervention.reference}`,
       html: wrapEmail({
         preheader: `Voici le rapport d'intervention ${intervention.reference}.`,
