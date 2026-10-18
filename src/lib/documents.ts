@@ -175,11 +175,11 @@ export async function relanceDocument(sessionId: string, id: string) {
   return apiFetch<PseDocument>(`/api/documents/${id}/relance`, { method: 'POST', sessionId })
 }
 
-export async function markFacturePaid(sessionId: string, id: string, paymentMethod: string) {
+export async function markFacturePaid(sessionId: string, id: string, paymentMethod: string, paidAt?: string) {
   return apiFetch<PseDocument>(`/api/documents/${id}/pay`, {
     method: 'POST',
     sessionId,
-    body: { paymentMethod },
+    body: { paymentMethod, paidAt },
   })
 }
 

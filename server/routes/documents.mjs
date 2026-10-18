@@ -628,7 +628,7 @@ documentsRouter.post('/:id/convert', (req, res) => {
 
 
 documentsRouter.post('/:id/pay', (req, res) => {
-  const { paymentMethod } = req.body ?? {}
+  const { paymentMethod, paidAt } = req.body ?? {}
   const existing = db
     .prepare("SELECT * FROM documents WHERE id = ? AND kind = 'facture' AND deleted_at IS NULL")
     .get(req.params.id)
@@ -636,8 +636,14 @@ documentsRouter.post('/:id/pay', (req, res) => {
     return res.status(404).json({ error: 'Facture introuvable' })
   }
 
+  // paidAt : juste une date (YYYY-MM-DD) saisie par l'utilisateur — complétée
+  // à midi UTC pour que l'affichage (toujours en date seule, jamais l'heure)
+  // ne puisse pas glisser d'un jour selon le fuseau de lecture. Sans valeur
+  // fournie, l'heure réelle de la validation comme avant.
+  const paidAtIso = paidAt ? `${paidAt}T12:00:00.000Z` : now()
+
   db.prepare("UPDATE documents SET status='payee', paid_at=?, payment_method=? WHERE id=?").run(
-    now(),
+    paidAtIso,
     paymentMethod,
     req.params.id,
   )

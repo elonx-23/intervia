@@ -76,6 +76,7 @@ export default function FactureEdit() {
     email: '',
     notes: '',
     vatRate: 20,
+    issueDate: '',
     dueDate: '',
     discountType: 'amount' as DiscountType,
     discountValue: 0,
@@ -89,6 +90,7 @@ export default function FactureEdit() {
   const [clientOpen, setClientOpen] = React.useState(false)
   const [photoOpen, setPhotoOpen] = React.useState(false)
   const [payOpen, setPayOpen] = React.useState(false)
+  const [paidAtDate, setPaidAtDate] = React.useState(() => isoLocalDate(new Date()))
   const [settingsOpen, setSettingsOpen] = React.useState(false)
   const [paymentMethod, setPaymentMethod] = React.useState('Carte bancaire')
   const skipAutosave = React.useRef(true)
@@ -135,6 +137,7 @@ export default function FactureEdit() {
         email: d.email ?? '',
         notes: d.notes ?? '',
         vatRate: d.vat_rate,
+        issueDate: d.issue_date,
         dueDate: d.due_date ?? '',
         discountType: d.discount_type,
         discountValue: d.discount_value,
@@ -268,6 +271,7 @@ export default function FactureEdit() {
         items,
         vatRate: form.vatRate,
         notes: form.notes,
+        issueDate: form.issueDate,
         validityDate: doc.validity_date,
         dueDate: form.dueDate || null,
         discountType: form.discountType,
@@ -320,7 +324,7 @@ export default function FactureEdit() {
     setBusy(true)
     try {
       await flushPendingSave()
-      const updated = await markFacturePaid(session.sessionId, doc.id, paymentMethod)
+      const updated = await markFacturePaid(session.sessionId, doc.id, paymentMethod, paidAtDate)
       setDoc(updated)
       setPayOpen(false)
     } catch (e) {
@@ -673,6 +677,15 @@ export default function FactureEdit() {
                           onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
                         />
                       </div>
+                      <div className="flex min-w-0 flex-col gap-2">
+                        <Label>Date d'émission</Label>
+                        <Input
+                          type="date"
+                          className="w-full min-w-0"
+                          value={form.issueDate}
+                          onChange={(e) => setForm((f) => ({ ...f, issueDate: e.target.value }))}
+                        />
+                      </div>
                     </div>
 
                     <div className="flex flex-col gap-2">
@@ -752,7 +765,14 @@ export default function FactureEdit() {
               )}
 
               {doc.status === 'emise' && (
-                <Button variant="outline" size="lg" onClick={() => setPayOpen(true)}>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => {
+                    setPaidAtDate(isoLocalDate(new Date()))
+                    setPayOpen(true)
+                  }}
+                >
                   <CreditCard className="size-4" /> Marquer comme payée manuellement
                 </Button>
               )}
@@ -837,6 +857,10 @@ export default function FactureEdit() {
                 <SelectItem value="Autre">Autre</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label>Date d'encaissement</Label>
+            <Input type="date" value={paidAtDate} onChange={(e) => setPaidAtDate(e.target.value)} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayOpen(false)}>

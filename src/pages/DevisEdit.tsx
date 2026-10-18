@@ -67,6 +67,7 @@ export default function DevisEdit() {
     email: '',
     notes: '',
     vatRate: 20,
+    issueDate: '',
     validityDate: '',
     discountType: 'amount' as DiscountType,
     discountValue: 0,
@@ -125,6 +126,7 @@ export default function DevisEdit() {
         email: d.email ?? '',
         notes: d.notes ?? '',
         vatRate: d.vat_rate,
+        issueDate: d.issue_date,
         validityDate: d.validity_date ?? '',
         discountType: d.discount_type,
         discountValue: d.discount_value,
@@ -249,6 +251,7 @@ export default function DevisEdit() {
         items,
         vatRate: form.vatRate,
         notes: form.notes,
+        issueDate: form.issueDate,
         validityDate: form.validityDate || null,
         discountType: form.discountType,
         discountValue: form.discountValue,
@@ -573,6 +576,10 @@ export default function DevisEdit() {
                       <div className="flex min-w-0 flex-col gap-2">
                         <Label>Valide jusqu'au</Label>
                         <Input type="date" className="w-full min-w-0" value={form.validityDate} onChange={(e) => setForm((f) => ({ ...f, validityDate: e.target.value }))} />
+                      </div>
+                      <div className="flex min-w-0 flex-col gap-2">
+                        <Label>Date d'émission</Label>
+                        <Input type="date" className="w-full min-w-0" value={form.issueDate} onChange={(e) => setForm((f) => ({ ...f, issueDate: e.target.value }))} />
                       </div>
                     </div>
                     <div className="flex flex-col gap-2">
