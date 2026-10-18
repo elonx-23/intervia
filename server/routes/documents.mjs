@@ -5,7 +5,6 @@ import { requireAdmin, requireAuth } from '../auth.mjs'
 import { notifyAdmin } from '../notify.mjs'
 import { sendMail } from '../mailer.mjs'
 import { generateDocumentPdfBuffer } from '../pdf.mjs'
-import { getStripe } from '../stripe.mjs'
 import { broadcast } from '../events.mjs'
 import { rateLimit } from '../rateLimit.mjs'
 import { wrapEmail, ctaButton, fallbackLink, fillEmailText, DEFAULT_EMAIL_TEXTS } from '../emailTemplates.mjs'
@@ -625,70 +624,6 @@ documentsRouter.post('/:id/convert', (req, res) => {
   res.json(toApi(facture))
 })
 
-// Crée un vrai lien de paiement Stripe ("Payment Link", buy.stripe.com/...)
-// pour le solde dû de la facture, et renvoie son URL — génère une matrice QR
-// bien plus simple à scanner qu'une session Checkout classique (dont l'URL
-// checkout.stripe.com/c/pay/... dépasse souvent 400 caractères, fragment de
-// session inclus) : un Payment Link ne fait qu'une cinquantaine de
-// caractères, ET résout directement sur le domaine de Stripe, sans jamais
-// transiter par notre propre serveur. Contrairement à une session Checkout
-// (à usage unique par nature), un Payment Link reste actif tant qu'on ne le
-// désactive pas explicitement — un précédent lien encore actif pour cette
-// facture est donc désactivé avant d'en créer un nouveau, et le webhook
-// (stripeWebhook.mjs) désactive celui-ci à son tour une fois payé.
-documentsRouter.post('/:id/stripe-payment-link', externalActionLimiter, async (req, res) => {
-  const stripe = getStripe()
-  if (!stripe) {
-    return res.status(400).json({ error: "Stripe n'est pas configuré (clé secrète manquante)." })
-  }
-
-  const existing = db
-    .prepare("SELECT * FROM documents WHERE id = ? AND kind = 'facture' AND deleted_at IS NULL")
-    .get(req.params.id)
-  if (!existing || !canAccess(req.caller, req.sessionId, existing)) {
-    return res.status(404).json({ error: 'Facture introuvable' })
-  }
-  if (existing.status === 'payee') return res.status(400).json({ error: 'Cette facture est déjà payée' })
-
-  const amount = Math.round(totalTTC(existing) * 100)
-  if (amount <= 0) return res.status(400).json({ error: 'Montant invalide' })
-
-  const publicUrl = req.get('origin') ?? process.env.PUBLIC_URL ?? 'http://localhost:5173'
-  const clientName = [existing.client_first_name, existing.client_last_name].filter(Boolean).join(' ') || 'Client'
-
-  try {
-    if (existing.stripe_payment_link_id) {
-      try {
-        await stripe.paymentLinks.update(existing.stripe_payment_link_id, { active: false })
-      } catch {
-        // déjà désactivé, ou introuvable côté Stripe — pas bloquant
-      }
-    }
-
-    const link = await stripe.paymentLinks.create({
-      line_items: [
-        {
-          price_data: {
-            currency: 'eur',
-            unit_amount: amount,
-            product_data: { name: `Facture ${existing.number} — ${clientName}` },
-          },
-          quantity: 1,
-        },
-      ],
-      metadata: { document_id: existing.id },
-      after_completion: {
-        type: 'redirect',
-        redirect: { url: `${publicUrl}/facture/${existing.public_token}?paiement=succes` },
-      },
-    })
-
-    db.prepare('UPDATE documents SET stripe_payment_link_id = ? WHERE id = ?').run(link.id, existing.id)
-    res.json({ url: link.url })
-  } catch (e) {
-    res.status(500).json({ error: e.message ?? 'Erreur Stripe' })
-  }
-})
 
 documentsRouter.post('/:id/pay', (req, res) => {
   const { paymentMethod } = req.body ?? {}

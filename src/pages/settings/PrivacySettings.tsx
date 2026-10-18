@@ -20,7 +20,7 @@ const SECTIONS = [
   },
   {
     title: 'Paiements en ligne (Stripe)',
-    body: `Lorsqu'un client paie via un lien de paiement généré par l'application, la saisie de la carte bancaire est effectuée directement sur les pages sécurisées de Stripe — Intervia ne reçoit et ne stocke jamais le numéro de carte, seulement la confirmation du paiement.`,
+    body: `Stripe est utilisé pour la facturation de l'abonnement Intervia — la saisie de la carte bancaire est effectuée directement sur les pages sécurisées de Stripe, Intervia ne reçoit et ne stocke jamais le numéro de carte, seulement la confirmation du paiement.`,
   },
   {
     title: 'Conservation',

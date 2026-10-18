@@ -187,14 +187,6 @@ export async function markFactureUnpaid(sessionId: string, id: string) {
   return apiFetch<PseDocument>(`/api/documents/${id}/unpay`, { method: 'POST', sessionId })
 }
 
-// Crée un vrai lien de paiement Stripe (buy.stripe.com/…, ~50 caractères) —
-// contrairement à une session Checkout classique, il résout directement sur
-// le domaine de Stripe, sans transiter par notre serveur, et donne une
-// matrice QR bien plus simple à scanner.
-export async function createStripePaymentLink(sessionId: string, id: string) {
-  return apiFetch<{ url: string }>(`/api/documents/${id}/stripe-payment-link`, { method: 'POST', sessionId })
-}
-
 export async function duplicateDocument(sessionId: string, id: string) {
   return apiFetch<PseDocument>(`/api/documents/${id}/duplicate`, { method: 'POST', sessionId })
 }

@@ -20,10 +20,6 @@ const SECTIONS = [
     body: `L'application est destinée exclusivement à la gestion de l'activité de ${COMPANY.name} : suivi des interventions, création et signature de devis, émission et encaissement de factures, et fonctions associées. Toute utilisation à d'autres fins n'est pas autorisée.`,
   },
   {
-    title: 'Paiements en ligne',
-    body: `Les paiements par carte effectués via les liens de paiement générés par l'application sont traités par Stripe. Intervia ne stocke jamais de numéro de carte bancaire — voir la politique de confidentialité pour le détail des données conservées.`,
-  },
-  {
     title: 'Disponibilité',
     body: `L'application est hébergée par l'entreprise elle-même (pas de service tiers). Aucune garantie de disponibilité continue n'est apportée ; des interruptions peuvent survenir lors de maintenances.`,
   },

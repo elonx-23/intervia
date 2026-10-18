@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   ClipboardList,
   Contact,
-  CreditCard,
   Euro,
   Megaphone,
   Plus,
@@ -314,16 +313,6 @@ export default function Dashboard() {
                   <Contact className="size-4" />
                 </div>
                 <span className="text-sm font-medium">Clients</span>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link to="/paiements">
-            <Card className="py-4">
-              <CardContent className="flex flex-col items-center gap-2 px-3 text-center">
-                <div className="flex size-8 items-center justify-center rounded-full bg-success/15 text-success">
-                  <CreditCard className="size-4" />
-                </div>
-                <span className="text-sm font-medium">Paiements</span>
               </CardContent>
             </Card>
           </Link>

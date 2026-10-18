@@ -40,7 +40,6 @@ const BackupSettings = React.lazy(() => import('@/pages/settings/BackupSettings'
 const CompanySettings = React.lazy(() => import('@/pages/settings/CompanySettings'))
 const ContactSettings = React.lazy(() => import('@/pages/settings/ContactSettings'))
 const EmailTextsSettings = React.lazy(() => import('@/pages/settings/EmailTextsSettings'))
-const IntegrationsSettings = React.lazy(() => import('@/pages/settings/IntegrationsSettings'))
 const NotificationSettings = React.lazy(() => import('@/pages/settings/NotificationSettings'))
 const PrivacySettings = React.lazy(() => import('@/pages/settings/PrivacySettings'))
 const RegionSettings = React.lazy(() => import('@/pages/settings/RegionSettings'))
@@ -52,7 +51,6 @@ const Statistiques = React.lazy(() => import('@/pages/Statistiques'))
 const Dashboard = React.lazy(() => import('@/pages/admin/Dashboard'))
 const Clients = React.lazy(() => import('@/pages/admin/Clients'))
 const ClientDetail = React.lazy(() => import('@/pages/admin/ClientDetail'))
-const Paiements = React.lazy(() => import('@/pages/admin/Paiements'))
 const Techniciens = React.lazy(() => import('@/pages/admin/Techniciens'))
 const SignDevis = React.lazy(() => import('@/pages/public/SignDevis'))
 const ViewFacture = React.lazy(() => import('@/pages/public/ViewFacture'))
@@ -117,10 +115,8 @@ function AppRoutes() {
                 <Route path="/techniciens" element={<Techniciens />} />
                 <Route path="/clients" element={<Clients />} />
                 <Route path="/clients/:key" element={<ClientDetail />} />
-                <Route path="/paiements" element={<Paiements />} />
                 <Route path="/reglages/entreprise" element={<CompanySettings />} />
                 <Route path="/reglages/emails" element={<EmailTextsSettings />} />
-                <Route path="/reglages/integrations" element={<IntegrationsSettings />} />
                 <Route path="/reglages/region" element={<RegionSettings />} />
                 <Route path="/reglages/securite" element={<SecuritySettings />} />
                 <Route path="/reglages/sauvegardes" element={<BackupSettings />} />

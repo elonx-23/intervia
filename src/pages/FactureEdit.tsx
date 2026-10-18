@@ -1,6 +1,6 @@
-import { AlertTriangle, ArrowDown, ArrowUp, BellRing, ChevronUp, CirclePlus, Copy, CreditCard, Download, Mail, MessageSquare, Paperclip, PenLine, Settings2, Share2, Smartphone, Trash2, User } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, BellRing, ChevronUp, CirclePlus, Copy, CreditCard, Download, Mail, MessageSquare, Paperclip, PenLine, Settings2, Share2, Trash2, User } from 'lucide-react'
 import * as React from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import { AddressField } from '@/components/AddressField'
 import { ClientPicker } from '@/components/ClientPicker'
@@ -11,7 +11,6 @@ import { DocumentPdfViewer } from '@/components/DocumentPdfViewer'
 import { ItemLabelField } from '@/components/ItemLabelField'
 import { LegalClausesCard } from '@/components/LegalClausesCard'
 import { PhotoUploader } from '@/components/PhotoUploader'
-import { PaymentQrDialog } from '@/components/PaymentQrDialog'
 import { SendFab } from '@/components/SendFab'
 import { SignOnDeviceDialog } from '@/components/SignOnDeviceDialog'
 import { Badge } from '@/components/ui/badge'
@@ -34,7 +33,6 @@ import {
   FACTURE_STATUS_LABELS,
   adjustmentKindOf,
   adjustmentLabel,
-  createStripePaymentLink,
   deleteDocument,
   discountAmount,
   duplicateDocument,
@@ -53,7 +51,6 @@ import {
   type PseDocument,
 } from '@/lib/documents'
 import { friendlyError } from '@/lib/errors'
-import { isStripeConfigured } from '@/lib/payments'
 import { isoLocalDate } from '@/lib/utils'
 
 export default function FactureEdit() {
@@ -93,23 +90,6 @@ export default function FactureEdit() {
   const [payOpen, setPayOpen] = React.useState(false)
   const [settingsOpen, setSettingsOpen] = React.useState(false)
   const [paymentMethod, setPaymentMethod] = React.useState('Carte bancaire')
-  const [stripeLoading, setStripeLoading] = React.useState(false)
-  const [qrOpen, setQrOpen] = React.useState(false)
-  const [paymentUrl, setPaymentUrl] = React.useState<string | null>(null)
-  // Sans clé Stripe configurée, /api/documents/:id/stripe-checkout échoue de
-  // toute façon côté serveur — mais laisser un bouton cliquable qui finit
-  // sur une erreur générique est une mauvaise expérience, pour l'admin
-  // comme pour un technicien (qui ne peut pas configurer la clé lui-même,
-  // seul l'admin le peut dans Réglages → Intégrations). Vérifié en amont
-  // pour remplacer le bouton par un message clair — admin ou technicien.
-  const [stripeConfigured, setStripeConfigured] = React.useState<boolean | null>(null)
-
-  React.useEffect(() => {
-    if (!session) return
-    isStripeConfigured(session.sessionId)
-      .then(setStripeConfigured)
-      .catch(() => setStripeConfigured(null))
-  }, [session])
   const skipAutosave = React.useRef(true)
   const saveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -393,29 +373,6 @@ export default function FactureEdit() {
       setError(friendlyError(e, 'Erreur.'))
     } finally {
       setBusy(false)
-    }
-  }
-
-  // Le lien de paiement s'affiche en QR code sur le téléphone du technicien
-  // — c'est le CLIENT qui scanne avec son propre téléphone pour payer, pas
-  // besoin d'ouvrir la page sur l'appareil du technicien. Un vrai Payment
-  // Link Stripe (buy.stripe.com/…, ~50 caractères) plutôt qu'une session
-  // Checkout classique (souvent 400+ caractères) : matrice QR bien moins
-  // dense, ET ça résout directement chez Stripe, sans jamais transiter par
-  // notre propre serveur.
-  const payWithStripe = async () => {
-    if (!session) return
-    setStripeLoading(true)
-    setError(null)
-    try {
-      await flushPendingSave()
-      const { url } = await createStripePaymentLink(session.sessionId, doc.id)
-      setPaymentUrl(url)
-      setQrOpen(true)
-    } catch (e) {
-      setError(friendlyError(e, 'Erreur.'))
-    } finally {
-      setStripeLoading(false)
     }
   }
 
@@ -793,27 +750,6 @@ export default function FactureEdit() {
                 </Button>
               )}
 
-              {doc.status === 'emise' && stripeConfigured === false ? (
-                <div className="flex flex-col gap-2 rounded-2xl border border-warning/40 bg-warning/10 p-3">
-                  <p className="text-sm text-warning">
-                    {session?.role === 'admin'
-                      ? 'Ajoute ta clé Stripe pour pouvoir envoyer un lien de paiement par QR code.'
-                      : "Le paiement en ligne n'est pas encore activé — demande à ton administrateur de configurer Stripe dans Réglages → Intégrations."}
-                  </p>
-                  {session?.role === 'admin' && (
-                    <Button variant="outline" size="sm" asChild>
-                      <Link to="/reglages/integrations">Configurer Stripe</Link>
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                doc.status === 'emise' && (
-                  <Button size="lg" onClick={payWithStripe} disabled={stripeLoading}>
-                    <Smartphone className="size-4" /> {stripeLoading ? 'Ouverture…' : 'Envoyer un lien de paiement'}
-                  </Button>
-                )
-              )}
-
               {doc.status === 'emise' && (
                 <Button variant="outline" size="lg" onClick={() => setPayOpen(true)}>
                   <CreditCard className="size-4" /> Marquer comme payée manuellement
@@ -880,17 +816,6 @@ export default function FactureEdit() {
       )}
 
       <SignOnDeviceDialog document={doc} open={signOpen} onOpenChange={setSignOpen} onSigned={setDoc} />
-
-      {session && (
-        <PaymentQrDialog
-          open={qrOpen}
-          onOpenChange={setQrOpen}
-          url={paymentUrl}
-          sessionId={session.sessionId}
-          documentId={doc.id}
-          onPaid={setDoc}
-        />
-      )}
 
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
         <DialogContent>

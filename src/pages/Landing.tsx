@@ -38,7 +38,7 @@ const FEATURES = [
   {
     icon: CreditCard,
     title: 'Encaissements',
-    body: 'Encaisse par carte (lien de paiement), espèces ou virement — le suivi se fait tout seul.',
+    body: 'Encaisse en espèces, carte ou virement — le suivi se fait tout seul.',
   },
   {
     icon: Bell,

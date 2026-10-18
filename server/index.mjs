@@ -18,7 +18,6 @@ import { statsRouter } from './routes/stats.mjs'
 import { techniciansRouter } from './routes/technicians.mjs'
 import { uploadRouter, uploadsDir } from './routes/upload.mjs'
 import { stripeWebhookRouter } from './routes/stripeWebhook.mjs'
-import { stripeStatusRouter } from './routes/stripeStatus.mjs'
 import { settingsRouter } from './routes/settings.mjs'
 import { eventsRouter } from './routes/events.mjs'
 import { backupsRouter } from './routes/backups.mjs'
@@ -75,7 +74,6 @@ app.use('/api/notifications', notificationsRouter)
 app.use('/api/stats', statsRouter)
 app.use('/api/technicians', techniciansRouter)
 app.use('/api/upload', uploadRouter)
-app.use('/api/stripe', stripeStatusRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api/events', eventsRouter)
 app.use('/api/backups', backupsRouter)
