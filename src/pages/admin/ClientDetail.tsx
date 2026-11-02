@@ -1,3 +1,4 @@
+import { Phone } from 'lucide-react'
 import * as React from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
@@ -6,6 +7,7 @@ import { ErrorState } from '@/components/layout/ErrorState'
 import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth'
 import { listClients, type ClientSummary } from '@/lib/clients'
@@ -17,6 +19,7 @@ import {
   type PseDocument,
 } from '@/lib/documents'
 import { friendlyError } from '@/lib/errors'
+import { placeCall } from '@/lib/telephony'
 
 // Même règle d'identification que côté serveur (téléphone en priorité, sinon
 // nom + adresse) — dupliquée ici volontairement, c'est une comparaison
@@ -37,6 +40,22 @@ export default function ClientDetail() {
   const [client, setClient] = React.useState<ClientSummary | null>(null)
   const [documents, setDocuments] = React.useState<PseDocument[] | null>(null)
   const [error, setError] = React.useState<string | null>(null)
+  const [calling, setCalling] = React.useState(false)
+  const [callMsg, setCallMsg] = React.useState<string | null>(null)
+
+  const call = async () => {
+    if (!session || !client?.phone) return
+    setCalling(true)
+    setCallMsg(null)
+    try {
+      await placeCall(session.sessionId, client.phone)
+      setCallMsg('Ton téléphone va sonner.')
+    } catch (e) {
+      setCallMsg(friendlyError(e, "Erreur lors de l'appel."))
+    } finally {
+      setCalling(false)
+    }
+  }
 
   React.useEffect(() => {
     if (!session || !key) return
@@ -76,7 +95,15 @@ export default function ClientDetail() {
       <div className="flex flex-col gap-4">
         <Card>
           <CardContent className="flex flex-col gap-2">
-            {client.phone && <p className="text-sm text-muted-foreground">{client.phone}</p>}
+            {client.phone && (
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm text-muted-foreground">{client.phone}</p>
+                <Button variant="outline" size="sm" onClick={call} disabled={calling}>
+                  <Phone className="size-4" /> {calling ? 'Appel…' : 'Appeler'}
+                </Button>
+              </div>
+            )}
+            {callMsg && <p className="text-xs text-muted-foreground">{callMsg}</p>}
             {client.address && <p className="text-sm text-muted-foreground">{client.address}</p>}
             <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
               <p>

@@ -53,6 +53,7 @@ const Statistiques = React.lazy(() => import('@/pages/Statistiques'))
 const Dashboard = React.lazy(() => import('@/pages/admin/Dashboard'))
 const Clients = React.lazy(() => import('@/pages/admin/Clients'))
 const ClientDetail = React.lazy(() => import('@/pages/admin/ClientDetail'))
+const CallLog = React.lazy(() => import('@/pages/admin/CallLog'))
 const Techniciens = React.lazy(() => import('@/pages/admin/Techniciens'))
 const SignDevis = React.lazy(() => import('@/pages/public/SignDevis'))
 const ViewFacture = React.lazy(() => import('@/pages/public/ViewFacture'))
@@ -117,6 +118,7 @@ function AppRoutes() {
                 <Route path="/techniciens" element={<Techniciens />} />
                 <Route path="/clients" element={<Clients />} />
                 <Route path="/clients/:key" element={<ClientDetail />} />
+                <Route path="/appels" element={<CallLog />} />
                 <Route path="/reglages/entreprise" element={<CompanySettings />} />
                 <Route path="/reglages/emails" element={<EmailTextsSettings />} />
                 <Route path="/reglages/telephonie" element={<TelephonySettings />} />

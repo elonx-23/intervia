@@ -6,6 +6,7 @@ import {
   Contact,
   Euro,
   Megaphone,
+  Phone,
   Plus,
   TrendingUp,
   Users,
@@ -314,6 +315,16 @@ export default function Dashboard() {
                   <Contact className="size-4" />
                 </div>
                 <span className="text-sm font-medium">Clients</span>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link to="/appels">
+            <Card className="py-4">
+              <CardContent className="flex flex-col items-center gap-2 px-3 text-center">
+                <div className="flex size-8 items-center justify-center rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400">
+                  <Phone className="size-4" />
+                </div>
+                <span className="text-sm font-medium">Appels</span>
               </CardContent>
             </Card>
           </Link>
