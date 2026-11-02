@@ -59,6 +59,25 @@ export function toE164(raw) {
   return n
 }
 
+// Twilio renvoie ses erreurs en anglais technique — on traduit celles que
+// l'admin peut rencontrer en pratique, avec quoi faire pour les corriger.
+function twilioErrorMessage(e) {
+  const msg = e?.message ?? ''
+  if (/trial account/i.test(msg)) {
+    return "Ton compte Twilio est encore en mode essai. Passe-le en compte complet (bouton « Upgrade account » sur console.twilio.com, avec carte bancaire et un premier crédit), puis réessaie."
+  }
+  if (/authenticat/i.test(msg)) {
+    return "Twilio refuse la connexion : vérifie l'Account SID et l'Auth Token dans l'onglet Réglages."
+  }
+  if (/address|bundle|regulat/i.test(msg)) {
+    return "Twilio demande une adresse ou un justificatif d'entreprise pour ce numéro français. Complète-les dans console.twilio.com (Phone Numbers → Regulatory Compliance), puis réessaie."
+  }
+  if (/balance|insufficient|funds/i.test(msg)) {
+    return 'Solde Twilio insuffisant. Ajoute du crédit sur console.twilio.com (Billing), puis réessaie.'
+  }
+  return msg ? `Erreur Twilio : ${msg}` : 'Erreur Twilio inconnue.'
+}
+
 function frenchCallStatus(twilioStatus) {
   const map = {
     completed: 'terminé',
@@ -239,7 +258,7 @@ telephonyRouter.get('/numbers/search', requireAdmin, async (req, res) => {
       })),
     )
   } catch (e) {
-    res.status(500).json({ error: e.message ?? 'Erreur Twilio' })
+    res.status(500).json({ error: twilioErrorMessage(e) })
   }
 })
 
@@ -252,7 +271,7 @@ telephonyRouter.get('/numbers', requireAdmin, async (req, res) => {
     const owned = await client.incomingPhoneNumbers.list({ limit: 20 })
     res.json(owned.map((n) => ({ sid: n.sid, phoneNumber: n.phoneNumber, friendlyName: n.friendlyName })))
   } catch (e) {
-    res.status(500).json({ error: e.message ?? 'Erreur Twilio' })
+    res.status(500).json({ error: twilioErrorMessage(e) })
   }
 })
 
@@ -275,7 +294,7 @@ telephonyRouter.post('/numbers/buy', requireAdmin, async (req, res) => {
     setTwilioCredentials(req.caller.team_id, { phoneNumber: bought.phoneNumber })
     res.json({ sid: bought.sid, phoneNumber: bought.phoneNumber })
   } catch (e) {
-    res.status(500).json({ error: e.message ?? 'Erreur Twilio' })
+    res.status(500).json({ error: twilioErrorMessage(e) })
   }
 })
 
@@ -297,7 +316,7 @@ telephonyRouter.delete('/numbers/:sid', requireAdmin, async (req, res) => {
     }
     res.json({ ok: true })
   } catch (e) {
-    res.status(500).json({ error: e.message ?? 'Erreur Twilio' })
+    res.status(500).json({ error: twilioErrorMessage(e) })
   }
 })
 
@@ -333,7 +352,7 @@ telephonyRouter.post('/call', requireAdmin, async (req, res) => {
     broadcast('call_update', { id: callId }, req.caller.team_id)
     res.json({ ok: true, callId })
   } catch (e) {
-    res.status(500).json({ error: e.message ?? 'Erreur Twilio' })
+    res.status(500).json({ error: twilioErrorMessage(e) })
   }
 })
 
