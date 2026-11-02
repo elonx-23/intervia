@@ -221,12 +221,13 @@ function insertOrder(teamId, fields) {
   return id
 }
 
-// Règle une commande qui vient d'être créée : rien à payer, payée par
-// l'app, ou à finaliser par l'admin via le lien.
+// Règle une commande qui vient d'être créée : payée par l'app, ou à finaliser
+// par l'admin via le lien. Même une commande à 0 € peut devoir être validée chez
+// l'opérateur : on tente donc toujours le règlement, et on garde le lien de la
+// commande au cas où elle n'avancerait pas (voir numbersOverview).
 async function settle(c, order, total) {
-  if (total === 0) return { status: 'en_cours', paymentUrl: null }
   const paid = order.orderId ? await tryPay(c, order.orderId) : false
-  return paid ? { status: 'en_cours', paymentUrl: null } : { status: 'a_regler', paymentUrl: order.url ?? null }
+  return { status: paid || total === 0 ? 'en_cours' : 'a_regler', paymentUrl: paid ? null : (order.url ?? null) }
 }
 
 const ordering = new Set()
@@ -556,12 +557,28 @@ export async function syncOrders(teamId, c, { accounts, numbers }) {
     if (status === null || status === 'en_cours' || status === 'a_regler') {
       if (completed) status = 'terminee'
     }
-    if (!status || status === order.status) continue
+
+    // Commande non réglée : si elle n'a pas pu l'être à la création (droits
+    // manquants à l'époque, par exemple), on retente de temps en temps pendant
+    // 24 h — c'est le règlement du prix que l'admin a déjà confirmé.
+    let paymentUrl = order.payment_url
+    if (status === 'a_regler' && order.order_id) {
+      const sinceAttempt = order.last_pay_attempt_at ? Date.now() - new Date(order.last_pay_attempt_at).getTime() : Infinity
+      const fresh = Date.now() - new Date(order.created_at).getTime() < 24 * 3600 * 1000
+      if (fresh && sinceAttempt > 10 * 60 * 1000) {
+        db.prepare('UPDATE telephony_orders SET last_pay_attempt_at = ? WHERE id = ?').run(now(), order.id)
+        if (await tryPay(c, order.order_id)) status = 'en_cours'
+      }
+      if (status === 'a_regler' && !paymentUrl) {
+        paymentUrl = await operatorGet(c, `/me/order/${order.order_id}`).then((o) => o.url ?? null).catch(() => null)
+      }
+    }
+    if (!status || (status === order.status && paymentUrl === order.payment_url)) continue
 
     db.prepare('UPDATE telephony_orders SET status = ?, specific_number = COALESCE(?, specific_number), payment_url = ?, updated_at = ? WHERE id = ?').run(
       status,
       foundNumber,
-      status === 'a_regler' ? order.payment_url : null,
+      status === 'terminee' ? null : paymentUrl,
       now(),
       order.id,
     )
@@ -608,7 +625,12 @@ export function numbersOverview(teamId) {
       label: hideProvider(o.label),
       number: o.specific_number,
       total: o.total_ttc,
-      actionUrl: o.status === 'a_regler' ? o.payment_url : null,
+      // Lien pour finaliser : commande à régler, ou commande « en cours » qui
+      // n'avance pas depuis plus de 5 minutes.
+      actionUrl:
+        o.status === 'a_regler' || (o.status === 'en_cours' && Date.now() - new Date(o.created_at).getTime() > 5 * 60 * 1000)
+          ? o.payment_url
+          : null,
       createdAt: o.created_at,
     }))
 

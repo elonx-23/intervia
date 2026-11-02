@@ -147,18 +147,26 @@ function Orders({ orders, onDismiss }: { orders: NumberOrder[]; onDismiss: (id: 
                   {state.label}
                 </Badge>
               </div>
-              {o.status === 'a_regler' && (
+              {o.status === 'en_cours' && Date.now() - new Date(o.createdAt).getTime() > 10 * 60 * 1000 && (
+                <p className="text-xs text-muted-foreground">
+                  Plus long que prévu.{' '}
+                  {o.actionUrl ? "Si rien n'avance, finalise la commande ci-dessous." : 'Contacte le support si ça dure.'}
+                </p>
+              )}
+              {(o.status === 'a_regler' || o.actionUrl) && (
                 <div className="flex flex-wrap gap-2">
                   {o.actionUrl && (
                     <Button size="sm" asChild>
                       <a href={o.actionUrl} target="_blank" rel="noreferrer">
-                        <ExternalLink className="size-4" /> Finaliser le paiement
+                        <ExternalLink className="size-4" /> {o.status === 'a_regler' ? 'Finaliser le paiement' : 'Finaliser la commande'}
                       </a>
                     </Button>
                   )}
-                  <Button variant="outline" size="sm" onClick={() => onDismiss(o.id)}>
-                    Annuler
-                  </Button>
+                  {o.status === 'a_regler' && (
+                    <Button variant="outline" size="sm" onClick={() => onDismiss(o.id)}>
+                      Annuler
+                    </Button>
+                  )}
                 </div>
               )}
               {o.status === 'documents' && (

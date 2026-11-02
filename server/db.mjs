@@ -312,6 +312,7 @@ ensureColumn('interventions', 'access_codes', 'TEXT')
 ensureColumn('interventions', 'source_call_id', 'TEXT')
 ensureColumn('calls', 'intervention_id', 'TEXT')
 ensureColumn('calls', 'provider_call_id', 'TEXT')
+ensureColumn('telephony_orders', 'last_pay_attempt_at', 'TEXT')
 
 // Reprise de la base d'avant OVH : l'ancienne colonne d'identifiant d'appel
 // (et son index) du précédent fournisseur n'a plus d'usage.
