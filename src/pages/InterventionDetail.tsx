@@ -1,9 +1,10 @@
-import { Check, ChevronRight, Copy, FileText, Navigation } from 'lucide-react'
+import { Check, ChevronRight, Copy, FileText, Navigation, PhoneIncoming } from 'lucide-react'
 import * as React from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { AddressField } from '@/components/AddressField'
 import { PhotoUploader } from '@/components/PhotoUploader'
+import { RecordingPlayer } from '@/components/RecordingPlayer'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -62,6 +63,8 @@ export default function InterventionDetail() {
     address: '',
     postalCode: '',
     city: '',
+    floor: '',
+    accessCodes: '',
     interventionType: '',
     description: '',
     amount: '',
@@ -79,6 +82,8 @@ export default function InterventionDetail() {
         address: data.address ?? '',
         postalCode: data.postal_code ?? '',
         city: data.city ?? '',
+        floor: data.floor ?? '',
+        accessCodes: data.access_codes ?? '',
         interventionType: data.intervention_type,
         description: data.description ?? '',
         amount: data.amount != null ? String(data.amount) : '',
@@ -260,6 +265,8 @@ export default function InterventionDetail() {
         address: form.address,
         postalCode: form.postalCode,
         city: form.city,
+        floor: form.floor,
+        accessCodes: form.accessCodes,
         interventionType: form.interventionType,
         description: form.description,
         amount: form.amount ? Number(form.amount) : null,
@@ -288,6 +295,20 @@ export default function InterventionDetail() {
             )}
           </div>
         </div>
+
+        {isAdmin && intervention.source_call_id && session && (
+          <div className="flex flex-col gap-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <PhoneIncoming className="size-4 text-sky-600 dark:text-sky-400" />
+              Créée depuis un appel — à vérifier
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Remplie automatiquement en écoutant l'appel. Un nom de rue ou un code a pu être mal compris : réécoute en
+              cas de doute.
+            </p>
+            <RecordingPlayer callId={intervention.source_call_id} sessionId={session.sessionId} />
+          </div>
+        )}
 
         {editing ? (
           <Card>
@@ -330,6 +351,20 @@ export default function InterventionDetail() {
                   <Input value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-2">
+                  <Label>Étage</Label>
+                  <Input value={form.floor} onChange={(e) => setForm((f) => ({ ...f, floor: e.target.value }))} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Codes d'accès</Label>
+                  <Input
+                    value={form.accessCodes}
+                    onChange={(e) => setForm((f) => ({ ...f, accessCodes: e.target.value }))}
+                    placeholder="Digicode, interphone…"
+                  />
+                </div>
+              </div>
               <div className="flex flex-col gap-2">
                 <Label>Type</Label>
                 <Input
@@ -368,7 +403,15 @@ export default function InterventionDetail() {
             <CardContent className="flex flex-col gap-2">
               <p className="font-medium">{client || 'Client sans nom'}</p>
               {intervention.phone && <p className="text-sm text-muted-foreground">{intervention.phone}</p>}
-              {intervention.address && <p className="text-sm text-muted-foreground">{intervention.address}</p>}
+              {(intervention.address || intervention.city) && (
+                <p className="text-sm text-muted-foreground">
+                  {[intervention.address, [intervention.postal_code, intervention.city].filter(Boolean).join(' ')]
+                    .filter(Boolean)
+                    .join(', ')}
+                </p>
+              )}
+              {intervention.floor && <p className="text-sm">Étage : {intervention.floor}</p>}
+              {intervention.access_codes && <p className="text-sm">Codes d'accès : {intervention.access_codes}</p>}
               <p className="text-sm">{intervention.intervention_type}</p>
               {intervention.description && <p className="text-sm text-muted-foreground">{intervention.description}</p>}
               <p className="text-sm">

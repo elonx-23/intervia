@@ -28,6 +28,9 @@ export interface Intervention {
   address: string | null
   postal_code: string | null
   city: string | null
+  floor: string | null
+  access_codes: string | null
+  source_call_id: string | null
   intervention_type: string
   description: string | null
   amount: number | null
@@ -60,6 +63,8 @@ export interface InterventionInput {
   address: string
   postalCode: string
   city: string
+  floor?: string
+  accessCodes?: string
   interventionType: string
   description: string
   amount: number | null
@@ -125,7 +130,12 @@ export function buildWhatsAppText(intervention: Intervention) {
   const tarif = intervention.amount != null ? `${intervention.amount} €` : 'non défini'
   const lines = [
     client && `Client : ${client}`,
-    intervention.address && `Adresse : ${intervention.address}`,
+    intervention.address &&
+      `Adresse : ${[intervention.address, [intervention.postal_code, intervention.city].filter(Boolean).join(' ')]
+        .filter(Boolean)
+        .join(', ')}`,
+    intervention.floor && `Étage : ${intervention.floor}`,
+    intervention.access_codes && `Codes d'accès : ${intervention.access_codes}`,
     intervention.intervention_type && `Type : ${intervention.intervention_type}`,
     intervention.description && `Description : ${intervention.description}`,
     `💰 Tarif : ${tarif}`,

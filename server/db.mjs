@@ -272,6 +272,10 @@ ensureColumn('push_subscriptions', 'team_id', 'TEXT REFERENCES teams(id)')
 ensureColumn('teams', 'contact_email', 'TEXT')
 ensureColumn('teams', 'contact_phone', 'TEXT')
 ensureColumn('teams', 'siret', 'TEXT')
+ensureColumn('interventions', 'floor', 'TEXT')
+ensureColumn('interventions', 'access_codes', 'TEXT')
+ensureColumn('interventions', 'source_call_id', 'TEXT')
+ensureColumn('calls', 'intervention_id', 'TEXT')
 
 // Index sur team_id (et les combinaisons réellement utilisées par les
 // routes) : depuis le cloisonnement multi-équipe, quasi toutes les requêtes

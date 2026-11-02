@@ -72,6 +72,9 @@ export interface CallRecord {
   transcription_status: string | null
   started_at: string
   ended_at: string | null
+  intervention_id: string | null
+  intervention_reference: string | null
+  client_name: string | null
 }
 
 export async function listCalls(sessionId: string) {

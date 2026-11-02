@@ -318,13 +318,13 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           </Link>
-          <Link to="/appels">
+          <Link to="/telephonie">
             <Card className="py-4">
               <CardContent className="flex flex-col items-center gap-2 px-3 text-center">
                 <div className="flex size-8 items-center justify-center rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400">
                   <Phone className="size-4" />
                 </div>
-                <span className="text-sm font-medium">Appels</span>
+                <span className="text-sm font-medium">Téléphonie</span>
               </CardContent>
             </Card>
           </Link>

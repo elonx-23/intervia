@@ -33,9 +33,9 @@ const LABELS: Record<string, { label: string; description: string }> = {
     label: 'Nouvelle facture à encaisser',
     description: 'Quand un devis est transformé en facture',
   },
-  facture_payee_stripe: {
-    label: 'Facture payée en ligne',
-    description: 'Quand un client paie via un lien ou QR code Stripe',
+  fiche_depuis_appel: {
+    label: 'Fiche créée depuis un appel',
+    description: "Quand un appel client devient automatiquement une fiche d'intervention",
   },
 }
 

@@ -23,6 +23,8 @@ export default function InterventionCreate() {
   const [address, setAddress] = React.useState('')
   const [postalCode, setPostalCode] = React.useState('')
   const [city, setCity] = React.useState('')
+  const [floor, setFloor] = React.useState('')
+  const [accessCodes, setAccessCodes] = React.useState('')
   const [interventionType, setInterventionType] = React.useState('')
   const [description, setDescription] = React.useState('')
   const [amount, setAmount] = React.useState('')
@@ -50,6 +52,8 @@ export default function InterventionCreate() {
         address,
         postalCode,
         city,
+        floor,
+        accessCodes,
         interventionType,
         description,
         amount: amount ? Number(amount) : null,
@@ -101,6 +105,22 @@ export default function InterventionCreate() {
           <div className="flex flex-col gap-2">
             <Label htmlFor="city">Ville</Label>
             <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="floor">Étage</Label>
+            <Input id="floor" value={floor} onChange={(e) => setFloor(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="accessCodes">Codes d'accès</Label>
+            <Input
+              id="accessCodes"
+              value={accessCodes}
+              onChange={(e) => setAccessCodes(e.target.value)}
+              placeholder="Digicode, interphone…"
+            />
           </div>
         </div>
 

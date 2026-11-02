@@ -320,9 +320,30 @@ telephonyRouter.post('/call', requireAdmin, async (req, res) => {
   }
 })
 
+// Le nom du client vient de la fiche créée depuis l'appel si elle existe,
+// sinon de la fiche la plus récente avec le même numéro (client déjà connu).
 telephonyRouter.get('/calls', (req, res) => {
   const rows = db
-    .prepare('SELECT * FROM calls WHERE team_id = ? ORDER BY started_at DESC LIMIT 200')
+    .prepare(
+      `SELECT c.*,
+         i.reference AS intervention_reference,
+         COALESCE(
+           NULLIF(TRIM(i.client_first_name || ' ' || i.client_last_name), ''),
+           (SELECT NULLIF(TRIM(k.client_first_name || ' ' || k.client_last_name), '')
+              FROM interventions k
+              WHERE k.team_id = c.team_id
+                AND k.phone IS NOT NULL
+                AND REPLACE(REPLACE(k.phone, ' ', ''), '.', '') IN (
+                  CASE WHEN c.direction = 'inbound' THEN c.from_number ELSE c.to_number END,
+                  '0' || SUBSTR(CASE WHEN c.direction = 'inbound' THEN c.from_number ELSE c.to_number END, 4)
+                )
+              ORDER BY k.created_at DESC LIMIT 1)
+         ) AS client_name
+       FROM calls c
+       LEFT JOIN interventions i ON i.id = c.intervention_id
+       WHERE c.team_id = ?
+       ORDER BY c.started_at DESC LIMIT 200`,
+    )
     .all(req.caller.team_id)
   res.json(rows)
 })

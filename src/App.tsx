@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import { AppLayout } from '@/components/layout/AppLayout'
 import { RequireAuth } from '@/components/layout/RequireAuth'
@@ -46,14 +46,13 @@ const PrivacySettings = React.lazy(() => import('@/pages/settings/PrivacySetting
 const RegionSettings = React.lazy(() => import('@/pages/settings/RegionSettings'))
 const SecuritySettings = React.lazy(() => import('@/pages/settings/SecuritySettings'))
 const SubscriptionSettings = React.lazy(() => import('@/pages/settings/SubscriptionSettings'))
-const TelephonySettings = React.lazy(() => import('@/pages/settings/TelephonySettings'))
 const TermsSettings = React.lazy(() => import('@/pages/settings/TermsSettings'))
 const ThemeSettings = React.lazy(() => import('@/pages/settings/ThemeSettings'))
 const Statistiques = React.lazy(() => import('@/pages/Statistiques'))
 const Dashboard = React.lazy(() => import('@/pages/admin/Dashboard'))
 const Clients = React.lazy(() => import('@/pages/admin/Clients'))
 const ClientDetail = React.lazy(() => import('@/pages/admin/ClientDetail'))
-const CallLog = React.lazy(() => import('@/pages/admin/CallLog'))
+const TelephonyHub = React.lazy(() => import('@/pages/telephony/TelephonyHub'))
 const Techniciens = React.lazy(() => import('@/pages/admin/Techniciens'))
 const SignDevis = React.lazy(() => import('@/pages/public/SignDevis'))
 const ViewFacture = React.lazy(() => import('@/pages/public/ViewFacture'))
@@ -118,10 +117,11 @@ function AppRoutes() {
                 <Route path="/techniciens" element={<Techniciens />} />
                 <Route path="/clients" element={<Clients />} />
                 <Route path="/clients/:key" element={<ClientDetail />} />
-                <Route path="/appels" element={<CallLog />} />
+                <Route path="/telephonie" element={<TelephonyHub />} />
+                <Route path="/appels" element={<Navigate to="/telephonie" replace />} />
                 <Route path="/reglages/entreprise" element={<CompanySettings />} />
                 <Route path="/reglages/emails" element={<EmailTextsSettings />} />
-                <Route path="/reglages/telephonie" element={<TelephonySettings />} />
+                <Route path="/reglages/telephonie" element={<Navigate to="/telephonie?onglet=reglages" replace />} />
                 <Route path="/reglages/region" element={<RegionSettings />} />
                 <Route path="/reglages/securite" element={<SecuritySettings />} />
                 <Route path="/reglages/sauvegardes" element={<BackupSettings />} />

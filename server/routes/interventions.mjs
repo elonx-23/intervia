@@ -15,7 +15,7 @@ interventionsRouter.use(requireAuth)
 // prochain numéro doit être cherché tous équipes confondues, jamais scopé
 // par team_id — sinon deux équipes qui démarrent chacune "à 1" se
 // percutent sur le même INT-00001 (UNIQUE constraint failed).
-function nextReference() {
+export function nextReference() {
   const rows = db.prepare("SELECT reference FROM interventions WHERE reference LIKE 'INT-%'").all()
   let max = 0
   for (const r of rows) {
@@ -68,9 +68,10 @@ interventionsRouter.post('/', requireAdmin, (req, res) => {
 
   db.prepare(
     `INSERT INTO interventions
-      (id, reference, client_first_name, client_last_name, phone, address, postal_code, city, intervention_type,
-       description, amount, status, technicien_id, team_id, photos, reminder_count, created_by, created_at, assigned_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', 0, ?, ?, ?)`,
+      (id, reference, client_first_name, client_last_name, phone, address, postal_code, city, floor, access_codes,
+       intervention_type, description, amount, status, technicien_id, team_id, photos, reminder_count, created_by,
+       created_at, assigned_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', 0, ?, ?, ?)`,
   ).run(
     id,
     nextReference(),
@@ -80,6 +81,8 @@ interventionsRouter.post('/', requireAdmin, (req, res) => {
     b.address ?? null,
     b.postalCode ?? null,
     b.city ?? null,
+    b.floor ?? null,
+    b.accessCodes ?? null,
     b.interventionType ?? '',
     b.description ?? null,
     b.amount ?? null,
@@ -115,7 +118,7 @@ interventionsRouter.patch('/:id', requireAdmin, (req, res) => {
 
   db.prepare(
     `UPDATE interventions SET client_first_name=?, client_last_name=?, phone=?, address=?, postal_code=?, city=?,
-     intervention_type=?, description=?, amount=? WHERE id=?`,
+     floor=?, access_codes=?, intervention_type=?, description=?, amount=? WHERE id=?`,
   ).run(
     b.clientFirstName ?? existing.client_first_name,
     b.clientLastName ?? existing.client_last_name,
@@ -123,6 +126,8 @@ interventionsRouter.patch('/:id', requireAdmin, (req, res) => {
     b.address ?? existing.address,
     b.postalCode ?? existing.postal_code,
     b.city ?? existing.city,
+    b.floor ?? existing.floor,
+    b.accessCodes ?? existing.access_codes,
     b.interventionType ?? existing.intervention_type,
     b.description ?? existing.description,
     b.amount ?? existing.amount,
