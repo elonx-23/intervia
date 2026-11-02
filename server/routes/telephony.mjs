@@ -67,8 +67,9 @@ telephonyRouter.post('/voice/:teamId', (req, res) => {
 
   const creds = getTwilioCredentials(teamId)
   const twiml = new Twilio.twiml.VoiceResponse()
+  const ringNumbers = [creds?.forwardingNumber, creds?.forwardingNumber2].filter(Boolean)
 
-  if (!creds?.forwardingNumber) {
+  if (ringNumbers.length === 0) {
     twiml.say({ language: 'fr-FR' }, "Ce numéro n'est pas encore configuré. Merci de réessayer plus tard.")
     res.type('text/xml').send(twiml.toString())
     return
@@ -81,17 +82,18 @@ telephonyRouter.post('/voice/:teamId', (req, res) => {
   ).run(callId, teamId, req.body.From ?? null, req.body.To ?? null, req.body.CallSid ?? null, now())
   broadcast('call_update', { id: callId }, teamId)
 
-  twiml.dial(
-    {
-      record: 'record-from-answer',
-      recordingStatusCallback: webhookUrl(`/api/telephony/recording/${teamId}?callId=${callId}`),
-      recordingStatusCallbackMethod: 'POST',
-      action: webhookUrl(`/api/telephony/status/${teamId}?callId=${callId}`),
-      method: 'POST',
-      timeout: 25,
-    },
-    creds.forwardingNumber,
-  )
+  // Plusieurs <Number> dans un même <Dial> sonnent en parallèle : le
+  // premier qui décroche prend l'appel, les autres arrêtent de sonner — et
+  // seule la jambe décrochée est facturée à la minute.
+  const dial = twiml.dial({
+    record: 'record-from-answer',
+    recordingStatusCallback: webhookUrl(`/api/telephony/recording/${teamId}?callId=${callId}`),
+    recordingStatusCallbackMethod: 'POST',
+    action: webhookUrl(`/api/telephony/status/${teamId}?callId=${callId}`),
+    method: 'POST',
+    timeout: 25,
+  })
+  for (const number of ringNumbers) dial.number(number)
 
   res.type('text/xml').send(twiml.toString())
 })
@@ -187,18 +189,20 @@ telephonyRouter.get('/settings', requireAdmin, (req, res) => {
     accountSid: creds.accountSid ?? '',
     phoneNumber: creds.phoneNumber ?? '',
     forwardingNumber: creds.forwardingNumber ?? '',
+    forwardingNumber2: creds.forwardingNumber2 ?? '',
     hasAuthToken: Boolean(creds.authToken),
     hasOpenaiKey: Boolean(creds.openaiApiKey),
   })
 })
 
 telephonyRouter.patch('/settings', requireAdmin, (req, res) => {
-  const { accountSid, authToken, phoneNumber, forwardingNumber, openaiApiKey } = req.body ?? {}
+  const { accountSid, authToken, phoneNumber, forwardingNumber, forwardingNumber2, openaiApiKey } = req.body ?? {}
   setTwilioCredentials(req.caller.team_id, {
     accountSid,
     authToken: authToken || undefined,
     phoneNumber: phoneNumber !== undefined ? toE164(phoneNumber) : undefined,
     forwardingNumber: forwardingNumber !== undefined ? toE164(forwardingNumber) : undefined,
+    forwardingNumber2: forwardingNumber2 !== undefined ? toE164(forwardingNumber2) : undefined,
     openaiApiKey: openaiApiKey || undefined,
   })
   res.json({ ok: true })
@@ -290,14 +294,17 @@ telephonyRouter.post('/call', requireAdmin, async (req, res) => {
   if (!to) return res.status(400).json({ error: 'Numéro manquant.' })
   const client = getTwilioClient(req.caller.team_id)
   const creds = getTwilioCredentials(req.caller.team_id)
-  if (!client || !creds?.forwardingNumber || !creds?.phoneNumber) {
+  // Un appel sortant fait sonner UN seul des deux téléphones (celui de la
+  // personne qui a cliqué "Appeler"), pas les deux comme un appel entrant.
+  const ringFirst = req.body?.ring === 2 ? creds?.forwardingNumber2 : creds?.forwardingNumber
+  if (!client || !ringFirst || !creds?.phoneNumber) {
     return res.status(400).json({ error: 'Téléphonie non configurée (numéro ou renvoi manquant).' })
   }
 
   const callId = uuid()
   try {
     const call = await client.calls.create({
-      to: creds.forwardingNumber,
+      to: ringFirst,
       from: creds.phoneNumber,
       url: webhookUrl(`/api/telephony/voice/outbound-bridge/${req.caller.team_id}?callId=${callId}&target=${encodeURIComponent(to)}`),
       method: 'POST',

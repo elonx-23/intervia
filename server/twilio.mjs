@@ -38,7 +38,10 @@ export function isTelephonyConfigured(teamId) {
 // sont stockés avec les identifiants plutôt qu'à part — ils forment une
 // seule unité de configuration, modifiée/relue ensemble depuis Réglages →
 // Téléphonie.
-export function setTwilioCredentials(teamId, { accountSid, authToken, phoneNumber, forwardingNumber, openaiApiKey }) {
+export function setTwilioCredentials(
+  teamId,
+  { accountSid, authToken, phoneNumber, forwardingNumber, forwardingNumber2, openaiApiKey },
+) {
   const existing = resolveCredentials(teamId) ?? {}
   setSetting(
     'twilio_credentials',
@@ -47,6 +50,7 @@ export function setTwilioCredentials(teamId, { accountSid, authToken, phoneNumbe
       authToken: authToken !== undefined ? authToken : existing.authToken,
       phoneNumber: phoneNumber !== undefined ? phoneNumber : existing.phoneNumber,
       forwardingNumber: forwardingNumber !== undefined ? forwardingNumber : existing.forwardingNumber,
+      forwardingNumber2: forwardingNumber2 !== undefined ? forwardingNumber2 : existing.forwardingNumber2,
       openaiApiKey: openaiApiKey !== undefined ? openaiApiKey : existing.openaiApiKey,
     },
     teamId,

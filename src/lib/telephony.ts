@@ -5,6 +5,7 @@ export interface TelephonySettings {
   accountSid: string
   phoneNumber: string
   forwardingNumber: string
+  forwardingNumber2: string
   hasAuthToken: boolean
   hasOpenaiKey: boolean
 }
@@ -18,6 +19,7 @@ export interface TelephonySettingsInput {
   authToken?: string
   phoneNumber?: string
   forwardingNumber?: string
+  forwardingNumber2?: string
   openaiApiKey?: string
 }
 
@@ -76,6 +78,6 @@ export async function listCalls(sessionId: string) {
   return apiFetch<CallRecord[]>('/api/telephony/calls', { sessionId })
 }
 
-export async function placeCall(sessionId: string, to: string) {
-  return apiFetch<{ ok: true; callId: string }>('/api/telephony/call', { method: 'POST', sessionId, body: { to } })
+export async function placeCall(sessionId: string, to: string, ring: 1 | 2 = 1) {
+  return apiFetch<{ ok: true; callId: string }>('/api/telephony/call', { method: 'POST', sessionId, body: { to, ring } })
 }

@@ -45,6 +45,7 @@ export default function TelephonySettingsPage() {
   const [accountSid, setAccountSid] = React.useState('')
   const [authToken, setAuthToken] = React.useState('')
   const [forwardingNumber, setForwardingNumber] = React.useState('')
+  const [forwardingNumber2, setForwardingNumber2] = React.useState('')
   const [openaiApiKey, setOpenaiApiKey] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [saved, setSaved] = React.useState(false)
@@ -63,6 +64,7 @@ export default function TelephonySettingsPage() {
         setSettings(s)
         setAccountSid(s.accountSid)
         setForwardingNumber(s.forwardingNumber)
+        setForwardingNumber2(s.forwardingNumber2)
       })
       .catch((e) => setError(friendlyError(e, 'Erreur de chargement.')))
   }, [session])
@@ -92,6 +94,7 @@ export default function TelephonySettingsPage() {
         accountSid,
         authToken: authToken || undefined,
         forwardingNumber,
+        forwardingNumber2,
         openaiApiKey: openaiApiKey || undefined,
       })
       setAuthToken('')
@@ -193,7 +196,8 @@ export default function TelephonySettingsPage() {
                 d'accueil du dashboard) et colle-les ci-dessous.
               </TutorialStep>
               <TutorialStep n={3}>
-                Renseigne ton numéro de mobile réel (celui qui doit sonner quand un client appelle).
+                Renseigne ton numéro de portable, et celui de ton associé si besoin : les deux sonneront quand un
+                client appelle.
               </TutorialStep>
               <TutorialStep n={4}>
                 Crée une clé sur{' '}
@@ -233,8 +237,16 @@ export default function TelephonySettingsPage() {
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <Label>Numéro de renvoi (ton mobile)</Label>
-                <Input value={forwardingNumber} onChange={(e) => setForwardingNumber(e.target.value)} placeholder="+336xxxxxxxx" />
+                <Label>Téléphone 1 (ton portable)</Label>
+                <Input value={forwardingNumber} onChange={(e) => setForwardingNumber(e.target.value)} placeholder="06 12 34 56 78" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>Téléphone 2 (associé, facultatif)</Label>
+                <Input value={forwardingNumber2} onChange={(e) => setForwardingNumber2(e.target.value)} placeholder="06 98 76 54 32" />
+                <p className="text-xs text-muted-foreground">
+                  Les appels entrants sonnent sur les deux téléphones en même temps. Le premier qui décroche prend
+                  l'appel, et seul celui-là est facturé.
+                </p>
               </div>
               <div className="flex flex-col gap-2">
                 <Label>Clé API OpenAI (transcription)</Label>
