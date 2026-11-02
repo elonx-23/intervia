@@ -1,12 +1,15 @@
 import { db, now, uuid } from './db.mjs'
 import { broadcast } from './events.mjs'
-import { getTelephonyConfig, isTelephonyConfigured, ovhCredentials, ovhErrorMessage, ovhGet } from './ovh.mjs'
+import { getTelephonyConfig, isTelephonyConfigured, operatorCredentials, operatorGet } from './ovh.mjs'
 import { toE164 } from './phone.mjs'
+import { errorForScreen, syncNumbers, syncOrders } from './telephonyNumbers.mjs'
 import { transcribeCallRecording } from './transcription.mjs'
 
-// OVH ne prévient pas l'app quand un appel se termine (pas de webhook) : on
-// vient donc relever les enregistrements toutes les minutes (cron.mjs), et à
-// la demande depuis le bouton « Actualiser » de l'espace Téléphonie.
+// L'opérateur ne prévient pas l'app quand un appel se termine (pas de
+// webhook) : on vient donc relever les nouveautés toutes les minutes
+// (cron.mjs), et à la demande depuis le bouton « Actualiser » de l'espace
+// Téléphonie. Une passe = appels enregistrés, numéros (+ leur configuration),
+// commandes en cours.
 
 // Plafond par passage : à la première synchro d'un compte qui a déjà un long
 // historique, le reste est repris aux passages suivants.
@@ -19,7 +22,7 @@ const running = new Set()
 let recoveredAfterRestart = false
 
 export function getSyncState(teamId) {
-  return states.get(teamId) ?? { lastSyncAt: null, lastError: null, numbers: [] }
+  return states.get(teamId) ?? { lastSyncAt: null, lastError: null }
 }
 
 function isoOrNull(value) {
@@ -39,7 +42,7 @@ function insertRecordedCall(teamId, service, record) {
     toE164(record.callerIdNumber),
     toE164(service),
     Number(record.duration) || null,
-    `ovh:${service}:${record.id}`,
+    `op:${service}:${record.id}`,
     record.fileUrl || null,
     isoOrNull(record.callStart) ?? now(),
     isoOrNull(record.callEnd),
@@ -49,48 +52,62 @@ function insertRecordedCall(teamId, service, record) {
 }
 
 // Relève les nouveaux enregistrements des numéros configurés en groupe
-// d'appels chez OVH (là où sonnent les deux téléphones). Un enregistrement
-// = un appel décroché ; les appels manqués n'en ont pas.
+// d'appels (là où sonnent les téléphones). Un enregistrement = un appel
+// décroché ; les appels manqués n'en ont pas.
+async function importRecordings(teamId, c) {
+  const known = new Set(
+    db
+      .prepare("SELECT provider_call_id FROM calls WHERE team_id = ? AND provider_call_id LIKE 'op:%'")
+      .all(teamId)
+      .map((r) => r.provider_call_id),
+  )
+
+  let imported = 0
+  for (const billingAccount of await operatorGet(c, '/telephony/')) {
+    const base = `/telephony/${encodeURIComponent(billingAccount)}/easyHunting`
+    for (const service of await operatorGet(c, base)) {
+      const recordsBase = `${base}/${encodeURIComponent(service)}/records`
+      const ids = (await operatorGet(c, recordsBase)).filter((id) => !known.has(`op:${service}:${id}`)).sort((a, b) => b - a)
+      for (const id of ids) {
+        if (imported >= MAX_NEW_PER_RUN) break
+        try {
+          insertRecordedCall(teamId, service, await operatorGet(c, `${recordsBase}/${id}`))
+          imported++
+        } catch (e) {
+          console.log(`[telephonie] enregistrement ${id} ignoré : ${e.message}`)
+        }
+      }
+    }
+  }
+  return imported
+}
+
 export async function syncTeamCalls(teamId) {
   if (!isTelephonyConfigured(teamId)) return { imported: 0 }
   if (running.has(teamId)) return { imported: 0, busy: true }
   running.add(teamId)
 
-  const state = { lastSyncAt: null, lastError: null, numbers: getSyncState(teamId).numbers }
+  const state = { lastSyncAt: null, lastError: null }
   let imported = 0
   try {
-    const creds = ovhCredentials(getTelephonyConfig(teamId))
-    const known = new Set(
-      db
-        .prepare("SELECT provider_call_id FROM calls WHERE team_id = ? AND provider_call_id LIKE 'ovh:%'")
-        .all(teamId)
-        .map((r) => r.provider_call_id),
-    )
-
-    const numbers = []
-    for (const billingAccount of await ovhGet(creds, '/telephony/')) {
-      const base = `/telephony/${encodeURIComponent(billingAccount)}/easyHunting`
-      for (const service of await ovhGet(creds, base)) {
-        numbers.push(service)
-        const recordsBase = `${base}/${encodeURIComponent(service)}/records`
-        const ids = (await ovhGet(creds, recordsBase))
-          .filter((id) => !known.has(`ovh:${service}:${id}`))
-          .sort((a, b) => b - a)
-        for (const id of ids) {
-          if (imported >= MAX_NEW_PER_RUN) break
-          try {
-            insertRecordedCall(teamId, service, await ovhGet(creds, `${recordsBase}/${id}`))
-            imported++
-          } catch (e) {
-            console.log(`[telephonie] enregistrement ${id} ignoré : ${e.message}`)
-          }
-        }
-      }
+    const c = operatorCredentials(getTelephonyConfig(teamId))
+    const errors = []
+    // Les appels d'abord : une configuration de numéro lente ne doit jamais
+    // retarder la remontée des enregistrements.
+    try {
+      imported = await importRecordings(teamId, c)
+    } catch (e) {
+      errors.push(errorForScreen(e))
+      console.log(`[telephonie] relève des appels échouée (équipe ${teamId}) : ${e.message}`)
     }
-    state.numbers = numbers
-  } catch (e) {
-    state.lastError = ovhErrorMessage(e)
-    console.log(`[telephonie] synchro de l'équipe ${teamId} échouée : ${e.message}`)
+    try {
+      const overview = await syncNumbers(teamId, c)
+      await syncOrders(teamId, c, overview)
+    } catch (e) {
+      errors.push(errorForScreen(e))
+      console.log(`[telephonie] synchro des numéros échouée (équipe ${teamId}) : ${e.message}`)
+    }
+    state.lastError = errors[0] ?? null
   } finally {
     state.lastSyncAt = now()
     states.set(teamId, state)
@@ -102,7 +119,7 @@ export async function syncTeamCalls(teamId) {
 }
 
 // Transcrit les appels enregistrés qui n'ont pas encore de texte — y compris
-// ceux reçus avant que la clé OpenAI soit ajoutée.
+// ceux reçus avant que la clé de transcription soit ajoutée.
 function startPendingTranscriptions(teamId) {
   if (!recoveredAfterRestart) {
     // Un redémarrage du serveur en pleine transcription laisse l'appel bloqué

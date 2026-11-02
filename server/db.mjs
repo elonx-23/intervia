@@ -217,7 +217,7 @@ db.exec(`
   );
 
   -- Téléphonie (OVH) : un appel par ligne, relevé chez OVH par la synchro
-  -- (provider_call_id = « ovh:<numéro>:<id de l'enregistrement> », unique par
+  -- (provider_call_id = « op:<numéro>:<id de l'enregistrement> », unique par
   -- appel). La transcription est remplie en différé, pas à la création.
   CREATE TABLE IF NOT EXISTS calls (
     id TEXT PRIMARY KEY,
@@ -234,6 +234,42 @@ db.exec(`
     started_at TEXT NOT NULL,
     ended_at TEXT
   );
+
+  -- Numéros de téléphone de l'équipe chez l'opérateur, avec l'état de leur
+  -- configuration (renvoi vers les téléphones + enregistrement) :
+  -- config_hash = configuration réellement appliquée, comparée à celle voulue
+  -- à chaque synchro pour la réappliquer si les téléphones changent.
+  CREATE TABLE IF NOT EXISTS telephony_numbers (
+    team_id TEXT NOT NULL REFERENCES teams(id),
+    service_name TEXT NOT NULL,
+    billing_account TEXT NOT NULL,
+    config_hash TEXT,
+    last_error TEXT,
+    last_attempt_at TEXT,
+    configured_at TEXT,
+    terminating_at TEXT,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (team_id, service_name)
+  );
+
+  -- Commandes passées depuis l'app (activation de la téléphonie, achat d'un
+  -- numéro) : garde la trace de ce que l'admin a commandé et de son avancement
+  -- (a_regler → en_cours → terminee), pour ne jamais commander deux fois.
+  CREATE TABLE IF NOT EXISTS telephony_orders (
+    id TEXT PRIMARY KEY,
+    team_id TEXT NOT NULL REFERENCES teams(id),
+    kind TEXT NOT NULL,
+    order_id INTEGER,
+    status TEXT NOT NULL,
+    label TEXT,
+    specific_number TEXT,
+    numbers_before TEXT,
+    total_ttc REAL,
+    payment_url TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_telephony_orders_team ON telephony_orders (team_id, created_at);
 `)
 
 // Migrations légères : ALTER TABLE tenté à chaque démarrage, l'erreur

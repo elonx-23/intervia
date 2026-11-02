@@ -3,7 +3,7 @@ import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
 
-// L'enregistrement vit chez OVH et n'est accessible que via la route
+// L'enregistrement vit chez l'opérateur et n'est accessible que via la route
 // authentifiée de l'app (réservée aux admins de l'équipe) — impossible de le
 // pointer directement en src= d'un <audio> comme une image publique, le
 // navigateur n'enverrait pas le header x-session-id. On le récupère en blob

@@ -76,7 +76,7 @@ function CallCard({ call, hasOpenaiKey, onChanged }: { call: CallRecord; hasOpen
           </Link>
         )}
 
-        {call.recording_url && session && <RecordingPlayer callId={call.id} sessionId={session.sessionId} />}
+        {call.has_recording && session && <RecordingPlayer callId={call.id} sessionId={session.sessionId} />}
 
         {call.transcription && (
           <div className="flex items-start gap-2 rounded-xl bg-secondary/40 p-3 text-sm">
@@ -87,7 +87,7 @@ function CallCard({ call, hasOpenaiKey, onChanged }: { call: CallRecord; hasOpen
         {call.transcription_status === 'en_attente' && (
           <p className="text-xs text-muted-foreground">Transcription en cours…</p>
         )}
-        {call.recording_url && !call.transcription && !call.transcription_status && !hasOpenaiKey && (
+        {call.has_recording && !call.transcription && !call.transcription_status && !hasOpenaiKey && (
           <p className="text-xs text-muted-foreground">Transcription non activée.</p>
         )}
         {call.transcription_status === 'erreur' && hasOpenaiKey && (

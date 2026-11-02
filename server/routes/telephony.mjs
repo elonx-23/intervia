@@ -1,8 +1,23 @@
 import { Router } from 'express'
 
 import { requireAdmin, requireAuth } from '../auth.mjs'
-import { db } from '../db.mjs'
+import { db, getSetting } from '../db.mjs'
 import { getTelephonyConfig, isTelephonyConfigured, updateTelephonyConfig } from '../ovh.mjs'
+import {
+  LEGAL_FORMS,
+  UserError,
+  activateAccount,
+  availableNumbers,
+  dismissOrder,
+  errorForScreen,
+  normalizeFrenchPhone,
+  numbersOverview,
+  orderNumber,
+  quoteNumber,
+  reconfigureNow,
+  releaseNumber,
+  searchZones,
+} from '../telephonyNumbers.mjs'
 import { getSyncState, syncTeamCalls } from '../telephonySync.mjs'
 import { downloadRecording, transcribeCallRecording } from '../transcription.mjs'
 
@@ -10,6 +25,22 @@ export const telephonyRouter = Router()
 
 // Tout l'espace Téléphonie est réservé aux admins, cloisonné par équipe.
 telephonyRouter.use(requireAuth, requireAdmin)
+
+// Erreur renvoyée à l'écran : jamais de nom de fournisseur ni de détail technique.
+function fail(res, e) {
+  if (!(e instanceof UserError)) console.log(`[telephonie] ${e?.message ?? e}`)
+  res.status(e instanceof UserError ? 400 : 502).json({ error: errorForScreen(e) })
+}
+
+// Applique tout de suite un changement (téléphones, commande) au lieu
+// d'attendre le passage de la minute — sans jamais bloquer la réponse.
+function syncSoon(teamId) {
+  syncTeamCalls(teamId).catch(() => {})
+}
+
+const SERVICE_NAME = /^\d{8,15}$/
+
+// ---------- État et réglages ----------
 
 // État affiché en haut de l'espace Téléphonie. Aucune clé n'en sort jamais,
 // seulement « configuré ou non ».
@@ -19,39 +50,200 @@ telephonyRouter.get('/status', (req, res) => {
   res.json({
     configured: isTelephonyConfigured(teamId),
     hasOpenaiKey: Boolean(getTelephonyConfig(teamId).openaiApiKey),
-    numbers: sync.numbers,
+    numbers: numbersOverview(teamId).numbers.map((n) => n.serviceName),
     lastSyncAt: sync.lastSyncAt,
     lastSyncError: sync.lastError,
   })
 })
 
-// Branchement du compte OVH et de la clé OpenAI. Pas d'écran pour ça dans
-// l'app : la configuration se fait directement avec Claude, qui appelle cette
-// route avec une session admin.
-telephonyRouter.patch('/settings', (req, res) => {
-  const { ovhApplicationKey, ovhApplicationSecret, ovhConsumerKey, openaiApiKey } = req.body ?? {}
-  updateTelephonyConfig(req.caller.team_id, {
-    ovhApplicationKey: ovhApplicationKey || undefined,
-    ovhApplicationSecret: ovhApplicationSecret || undefined,
-    ovhConsumerKey: ovhConsumerKey || undefined,
-    openaiApiKey: openaiApiKey || undefined,
+function guessLegalForm(text) {
+  const t = String(text ?? '').toLowerCase()
+  if (/individuel|auto|micro|\bei\b|eirl/.test(t)) return 'individual'
+  if (/association/.test(t)) return 'association'
+  if (/sarl|sas|sasu|eurl|\bsa\b|snc|scop|sci/.test(t)) return 'corporation'
+  return ''
+}
+
+// Première ouverture : on préremplit les informations légales avec la fiche
+// entreprise déjà saisie dans l'app (nom, SIRET, adresse, contact).
+function prefillLegal(teamId) {
+  const company = getSetting('company', teamId) ?? {}
+  const address = /^(\d+\s?(?:bis|ter)?)\s+(.+?),?\s*(\d{5})\s+(.+)$/i.exec(String(company.address ?? '').trim())
+  return {
+    legalform: guessLegalForm(company.legalForm),
+    organisation: company.name ?? '',
+    siret: company.siret ?? '',
+    ape: company.naf ?? '',
+    firstname: '',
+    name: '',
+    email: company.email ?? '',
+    phone: company.phone ?? '',
+    streetNumber: address?.[1] ?? '',
+    streetName: address?.[2] ?? '',
+    zip: address?.[3] ?? '',
+    city: address?.[4] ?? '',
+  }
+}
+
+const LEGAL_KEYS = ['legalform', 'organisation', 'siret', 'ape', 'firstname', 'name', 'email', 'phone', 'streetNumber', 'streetName', 'zip', 'city']
+
+function cleanLegal(input) {
+  const legal = {}
+  for (const key of LEGAL_KEYS) legal[key] = typeof input?.[key] === 'string' ? input[key].trim().slice(0, 120) : ''
+  if (legal.legalform && !LEGAL_FORMS.has(legal.legalform)) throw new UserError('Forme juridique invalide.')
+  return legal
+}
+
+telephonyRouter.get('/settings', (req, res) => {
+  const teamId = req.caller.team_id
+  const cfg = getTelephonyConfig(teamId)
+  res.json({
+    forwardingNumber: cfg.forwardingNumber ?? '',
+    forwardingNumber2: cfg.forwardingNumber2 ?? '',
+    legal: cfg.legal ?? prefillLegal(teamId),
+    recordingAccepted: Boolean(cfg.recordingAccepted),
   })
+})
+
+// Les clés d'accès (operator*, openaiApiKey) ne se saisissent pas dans l'app :
+// elles sont posées côté serveur par le support, via cette même route.
+telephonyRouter.patch('/settings', (req, res) => {
+  const teamId = req.caller.team_id
+  const body = req.body ?? {}
+  try {
+    const patch = {}
+    for (const key of ['forwardingNumber', 'forwardingNumber2']) {
+      if (typeof body[key] !== 'string') continue
+      const raw = body[key].trim()
+      const phone = raw === '' ? '' : normalizeFrenchPhone(raw)
+      if (phone === null) throw new UserError('Numéro de téléphone invalide.')
+      patch[key] = phone
+    }
+    if (body.legal !== undefined) patch.legal = cleanLegal(body.legal)
+    if (typeof body.recordingAccepted === 'boolean') {
+      patch.recordingAccepted = body.recordingAccepted
+      patch.recordingAcceptedAt = body.recordingAccepted ? new Date().toISOString() : null
+    }
+    for (const key of ['operatorAppKey', 'operatorAppSecret', 'operatorConsumerKey', 'openaiApiKey']) {
+      if (typeof body[key] === 'string' && body[key]) patch[key] = body[key]
+    }
+    updateTelephonyConfig(teamId, patch)
+    // Un réglage qui change la configuration des numéros (téléphones,
+    // enregistrement) lève l'attente après un éventuel échec précédent.
+    if (['forwardingNumber', 'forwardingNumber2', 'recordingAccepted'].some((k) => k in patch)) {
+      db.prepare('UPDATE telephony_numbers SET last_error = NULL, last_attempt_at = NULL WHERE team_id = ?').run(teamId)
+    }
+    syncSoon(teamId)
+    res.json({ ok: true })
+  } catch (e) {
+    fail(res, e)
+  }
+})
+
+// Relève immédiatement les nouveautés (appels, numéros, commandes) au lieu
+// d'attendre le passage automatique de la minute.
+telephonyRouter.post('/sync', async (req, res) => {
+  res.json(await syncTeamCalls(req.caller.team_id))
+})
+
+// ---------- Numéros ----------
+
+telephonyRouter.get('/zones', async (req, res) => {
+  try {
+    res.json(await searchZones(String(req.query.q ?? '').trim().slice(0, 40)))
+  } catch (e) {
+    fail(res, e)
+  }
+})
+
+telephonyRouter.get('/numbers/available', async (req, res) => {
+  try {
+    res.json(await availableNumbers(String(req.query.zone ?? '').trim().slice(0, 60)))
+  } catch (e) {
+    fail(res, e)
+  }
+})
+
+telephonyRouter.get('/numbers', (req, res) => {
+  res.json(numbersOverview(req.caller.team_id))
+})
+
+function choiceFrom(body) {
+  return {
+    zone: typeof body?.zone === 'string' ? body.zone.trim() : '',
+    specificNumber: typeof body?.specificNumber === 'string' && body.specificNumber ? body.specificNumber : null,
+  }
+}
+
+// Prix exact avant achat : rien n'est commandé ici.
+telephonyRouter.post('/numbers/quote', async (req, res) => {
+  try {
+    res.json(await quoteNumber(req.caller.team_id, choiceFrom(req.body)))
+  } catch (e) {
+    fail(res, e)
+  }
+})
+
+// Achat réel. L'admin envoie le prix qu'il a vu et confirmé ; le serveur le
+// recontrôle avant de commander.
+telephonyRouter.post('/numbers/order', async (req, res) => {
+  try {
+    const result = await orderNumber(req.caller.team_id, choiceFrom(req.body), Number(req.body?.expectedTotal))
+    syncSoon(req.caller.team_id)
+    res.json(result)
+  } catch (e) {
+    fail(res, e)
+  }
+})
+
+telephonyRouter.post('/account/activate', async (req, res) => {
+  try {
+    const result = await activateAccount(req.caller.team_id)
+    syncSoon(req.caller.team_id)
+    res.json(result)
+  } catch (e) {
+    fail(res, e)
+  }
+})
+
+telephonyRouter.post('/orders/:id/dismiss', (req, res) => {
+  dismissOrder(req.caller.team_id, req.params.id)
   res.json({ ok: true })
 })
 
-// Relève immédiatement les nouveaux enregistrements chez OVH (bouton
-// « Actualiser ») au lieu d'attendre le passage automatique de la minute.
-telephonyRouter.post('/sync', async (req, res) => {
-  const result = await syncTeamCalls(req.caller.team_id)
-  res.json(result)
+telephonyRouter.post('/numbers/:serviceName/configure', async (req, res) => {
+  if (!SERVICE_NAME.test(req.params.serviceName)) return res.status(400).json({ error: 'Numéro invalide.' })
+  try {
+    await reconfigureNow(req.caller.team_id, req.params.serviceName)
+    res.json(numbersOverview(req.caller.team_id))
+  } catch (e) {
+    fail(res, e)
+  }
 })
+
+telephonyRouter.delete('/numbers/:serviceName', async (req, res) => {
+  if (!SERVICE_NAME.test(req.params.serviceName)) return res.status(400).json({ error: 'Numéro invalide.' })
+  try {
+    await releaseNumber(req.caller.team_id, req.params.serviceName)
+    syncSoon(req.caller.team_id)
+    res.json({ ok: true })
+  } catch (e) {
+    fail(res, e)
+  }
+})
+
+// ---------- Appels ----------
 
 // Le nom du client vient de la fiche créée depuis l'appel si elle existe,
 // sinon de la fiche la plus récente avec le même numéro (client déjà connu).
+// Colonnes listées une à une : l'adresse du fichier audio (propre au
+// fournisseur) ne doit jamais sortir de l'API.
 telephonyRouter.get('/calls', (req, res) => {
   const rows = db
     .prepare(
-      `SELECT c.*,
+      `SELECT c.id, c.direction, c.from_number, c.to_number, c.status, c.duration_seconds,
+         (c.recording_url IS NOT NULL) AS has_recording, c.transcription, c.transcription_status,
+         c.started_at, c.ended_at, c.intervention_id,
          i.reference AS intervention_reference,
          COALESCE(
            NULLIF(TRIM(i.client_first_name || ' ' || i.client_last_name), ''),
@@ -71,22 +263,22 @@ telephonyRouter.get('/calls', (req, res) => {
        ORDER BY c.started_at DESC LIMIT 200`,
     )
     .all(req.caller.team_id)
-  res.json(rows)
+  res.json(rows.map((r) => ({ ...r, has_recording: Boolean(r.has_recording) })))
 })
 
-// Relance la transcription d'un appel resté en erreur (ex. crédit OpenAI
-// épuisé à ce moment-là).
+// Relance la transcription d'un appel resté en erreur (ex. crédit épuisé à
+// ce moment-là).
 telephonyRouter.post('/calls/:id/transcribe', (req, res) => {
   const call = db.prepare('SELECT * FROM calls WHERE id = ? AND team_id = ?').get(req.params.id, req.caller.team_id)
   if (!call?.recording_url) return res.status(404).json({ error: 'Enregistrement introuvable' })
   const { openaiApiKey } = getTelephonyConfig(req.caller.team_id)
-  if (!openaiApiKey) return res.status(400).json({ error: "La clé OpenAI n'est pas configurée." })
+  if (!openaiApiKey) return res.status(400).json({ error: "La transcription n'est pas activée." })
   transcribeCallRecording({ callId: call.id, recordingUrl: call.recording_url, openaiApiKey }).catch(() => {})
   res.json({ ok: true })
 })
 
-// L'audio reste chez OVH : on le relaie après avoir vérifié que l'appel
-// demandé appartient bien à l'équipe de l'appelant.
+// L'audio reste chez l'opérateur : on le relaie après avoir vérifié que
+// l'appel demandé appartient bien à l'équipe de l'appelant.
 telephonyRouter.get('/calls/:id/recording', async (req, res) => {
   const call = db.prepare('SELECT * FROM calls WHERE id = ? AND team_id = ?').get(req.params.id, req.caller.team_id)
   if (!call?.recording_url) return res.status(404).json({ error: 'Enregistrement introuvable' })
