@@ -1,63 +1,20 @@
 import { apiFetch } from '@/lib/api'
 
-export interface TelephonySettings {
+export interface TelephonyStatus {
   configured: boolean
-  accountSid: string
-  phoneNumber: string
-  forwardingNumber: string
-  forwardingNumber2: string
-  hasAuthToken: boolean
   hasOpenaiKey: boolean
+  // Numéros 01 branchés chez OVH, tels que renvoyés par OVH (ex. 0033184160184).
+  numbers: string[]
+  lastSyncAt: string | null
+  lastSyncError: string | null
 }
 
-export async function getTelephonySettings(sessionId: string) {
-  return apiFetch<TelephonySettings>('/api/telephony/settings', { sessionId })
+export async function getTelephonyStatus(sessionId: string) {
+  return apiFetch<TelephonyStatus>('/api/telephony/status', { sessionId })
 }
 
-export interface TelephonySettingsInput {
-  accountSid?: string
-  authToken?: string
-  phoneNumber?: string
-  forwardingNumber?: string
-  forwardingNumber2?: string
-  openaiApiKey?: string
-}
-
-export async function updateTelephonySettings(sessionId: string, data: TelephonySettingsInput) {
-  return apiFetch<{ ok: true }>('/api/telephony/settings', { method: 'PATCH', sessionId, body: data })
-}
-
-export interface AvailableNumber {
-  phoneNumber: string
-  friendlyName: string
-  locality: string | null
-  region: string | null
-}
-
-export async function searchAvailableNumbers(sessionId: string) {
-  return apiFetch<AvailableNumber[]>('/api/telephony/numbers/search', { sessionId })
-}
-
-export interface OwnedNumber {
-  sid: string
-  phoneNumber: string
-  friendlyName: string
-}
-
-export async function listOwnedNumbers(sessionId: string) {
-  return apiFetch<OwnedNumber[]>('/api/telephony/numbers', { sessionId })
-}
-
-export async function buyNumber(sessionId: string, phoneNumber: string) {
-  return apiFetch<{ sid: string; phoneNumber: string }>('/api/telephony/numbers/buy', {
-    method: 'POST',
-    sessionId,
-    body: { phoneNumber },
-  })
-}
-
-export async function releaseNumber(sessionId: string, sid: string) {
-  return apiFetch<{ ok: true }>(`/api/telephony/numbers/${sid}`, { method: 'DELETE', sessionId })
+export async function syncCalls(sessionId: string) {
+  return apiFetch<{ imported: number; error?: string | null }>('/api/telephony/sync', { method: 'POST', sessionId })
 }
 
 export interface CallRecord {
@@ -81,6 +38,17 @@ export async function listCalls(sessionId: string) {
   return apiFetch<CallRecord[]>('/api/telephony/calls', { sessionId })
 }
 
-export async function placeCall(sessionId: string, to: string, ring: 1 | 2 = 1) {
-  return apiFetch<{ ok: true; callId: string }>('/api/telephony/call', { method: 'POST', sessionId, body: { to, ring } })
+export async function retryTranscription(sessionId: string, callId: string) {
+  return apiFetch<{ ok: true }>(`/api/telephony/calls/${callId}/transcribe`, { method: 'POST', sessionId })
+}
+
+// Affichage d'un numéro stocké en +33612345678 / 0033184160184 / 0612345678
+// sous la forme française lisible « 06 12 34 56 78 ». Tout ce qui n'est pas un
+// numéro français (numéro masqué, étranger) est renvoyé tel quel.
+export function formatPhone(raw: string | null | undefined) {
+  if (!raw) return ''
+  const digits = raw.replace(/[\s.\-()]/g, '')
+  const national = /^(\+33|0033)(\d{9})$/.exec(digits)?.[2]
+  const local = national ? `0${national}` : /^0\d{9}$/.test(digits) ? digits : null
+  return local ? local.replace(/(\d{2})(?=\d)/g, '$1 ') : raw
 }

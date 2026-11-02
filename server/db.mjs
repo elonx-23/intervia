@@ -216,10 +216,9 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 
-  -- Téléphonie (Twilio) : un appel par ligne, entrant (reçu sur le numéro de
-  -- l'équipe, renvoyé vers le mobile de l'admin) ou sortant (déclenché depuis
-  -- une fiche client, ponté vers le mobile de l'admin). La transcription est
-  -- remplie en différé par le webhook d'enregistrement, pas à la création.
+  -- Téléphonie (OVH) : un appel par ligne, relevé chez OVH par la synchro
+  -- (provider_call_id = « ovh:<numéro>:<id de l'enregistrement> », unique par
+  -- appel). La transcription est remplie en différé, pas à la création.
   CREATE TABLE IF NOT EXISTS calls (
     id TEXT PRIMARY KEY,
     team_id TEXT REFERENCES teams(id),
@@ -228,7 +227,7 @@ db.exec(`
     to_number TEXT,
     status TEXT NOT NULL DEFAULT 'en-cours',
     duration_seconds INTEGER,
-    twilio_call_sid TEXT,
+    provider_call_id TEXT,
     recording_url TEXT,
     transcription TEXT,
     transcription_status TEXT,
@@ -276,6 +275,16 @@ ensureColumn('interventions', 'floor', 'TEXT')
 ensureColumn('interventions', 'access_codes', 'TEXT')
 ensureColumn('interventions', 'source_call_id', 'TEXT')
 ensureColumn('calls', 'intervention_id', 'TEXT')
+ensureColumn('calls', 'provider_call_id', 'TEXT')
+
+// Reprise de la base d'avant OVH : l'ancienne colonne d'identifiant d'appel
+// (et son index) du précédent fournisseur n'a plus d'usage.
+try {
+  db.exec('DROP INDEX IF EXISTS idx_calls_sid')
+  db.exec('ALTER TABLE calls DROP COLUMN twilio_call_sid')
+} catch {
+  // déjà nettoyée (ou base neuve, sans cette colonne)
+}
 
 // Index sur team_id (et les combinaisons réellement utilisées par les
 // routes) : depuis le cloisonnement multi-équipe, quasi toutes les requêtes
@@ -299,7 +308,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_team_memberships_user ON team_memberships (user_id);
   CREATE INDEX IF NOT EXISTS idx_team_memberships_team ON team_memberships (team_id);
   CREATE INDEX IF NOT EXISTS idx_calls_team ON calls (team_id, started_at);
-  CREATE INDEX IF NOT EXISTS idx_calls_sid ON calls (twilio_call_sid);
+  CREATE INDEX IF NOT EXISTS idx_calls_provider ON calls (provider_call_id);
 `)
 
 // Un compte technicien déjà rattaché à une équipe (via l'ancien /join, avant
@@ -362,6 +371,29 @@ export function setSetting(key, value, teamId) {
     JSON.stringify(value),
   )
 }
+
+// Reprise de la téléphonie d'avant OVH : on garde la clé OpenAI déjà saisie
+// (réglage « telephony » de l'équipe) et on supprime le reste de l'ancienne
+// configuration, dont les identifiants du précédent fournisseur.
+function migrateLegacyTelephonySettings() {
+  const legacySuffix = ':twilio_credentials'
+  const rows = db.prepare('SELECT key, value FROM settings WHERE key LIKE ?').all(`%${legacySuffix}`)
+  for (const row of rows) {
+    const teamId = row.key.slice(0, -legacySuffix.length)
+    let legacy = {}
+    try {
+      legacy = JSON.parse(row.value)
+    } catch {
+      // réglage illisible : rien à reprendre
+    }
+    const current = getSetting('telephony', teamId) ?? {}
+    if (legacy.openaiApiKey && !current.openaiApiKey) {
+      setSetting('telephony', { ...current, openaiApiKey: legacy.openaiApiKey }, teamId)
+    }
+    db.prepare('DELETE FROM settings WHERE key = ?').run(row.key)
+  }
+}
+migrateLegacyTelephonySettings()
 
 export function uuid() {
   return randomUUID()

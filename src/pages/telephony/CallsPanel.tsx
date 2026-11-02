@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useLiveEvents } from '@/hooks/useLiveEvents'
 import { useAuth } from '@/lib/auth'
 import { friendlyError } from '@/lib/errors'
-import { listCalls, placeCall, type CallRecord, type TelephonySettings } from '@/lib/telephony'
+import { formatPhone, listCalls, retryTranscription, type CallRecord } from '@/lib/telephony'
 
 function fmtDuration(seconds: number | null) {
   if (!seconds) return null
@@ -27,30 +27,19 @@ function statusVariant(status: string): 'success' | 'warning' | 'destructive' | 
   return 'outline'
 }
 
-function transcriptionLabel(status: string | null) {
-  if (status === 'en_attente') return 'Transcription en cours…'
-  if (status === 'erreur') return 'Transcription indisponible'
-  return null
-}
-
-function CallCard({ call, settings }: { call: CallRecord; settings: TelephonySettings }) {
+function CallCard({ call, hasOpenaiKey, onChanged }: { call: CallRecord; hasOpenaiKey: boolean; onChanged: () => void }) {
   const { session } = useAuth()
-  const [calling, setCalling] = React.useState(false)
-  const [message, setMessage] = React.useState<string | null>(null)
   const number = call.direction === 'inbound' ? call.from_number : call.to_number
-  const canCallBack = settings.configured && Boolean(settings.phoneNumber) && Boolean(number)
+  const [retrying, setRetrying] = React.useState(false)
 
-  const callBack = async (ring: 1 | 2) => {
-    if (!session || !number) return
-    setCalling(true)
-    setMessage(null)
+  const retry = async () => {
+    if (!session) return
+    setRetrying(true)
     try {
-      await placeCall(session.sessionId, number, ring)
-      setMessage(`Le téléphone ${ring} va sonner — décroche pour être mis en relation.`)
-    } catch (e) {
-      setMessage(friendlyError(e, "Erreur lors de l'appel."))
+      await retryTranscription(session.sessionId, call.id)
+      onChanged()
     } finally {
-      setCalling(false)
+      setRetrying(false)
     }
   }
 
@@ -65,8 +54,8 @@ function CallCard({ call, settings }: { call: CallRecord; settings: TelephonySet
               <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" />
             )}
             <div className="min-w-0">
-              <p className="truncate font-medium">{call.client_name || number || 'Numéro masqué'}</p>
-              {call.client_name && number && <p className="truncate text-xs text-muted-foreground">{number}</p>}
+              <p className="truncate font-medium">{call.client_name || formatPhone(number) || 'Numéro masqué'}</p>
+              {call.client_name && number && <p className="truncate text-xs text-muted-foreground">{formatPhone(number)}</p>}
             </div>
           </div>
           <Badge variant={statusVariant(call.status)}>{call.status}</Badge>
@@ -95,37 +84,38 @@ function CallCard({ call, settings }: { call: CallRecord; settings: TelephonySet
             <p className="min-w-0 whitespace-pre-line">{call.transcription}</p>
           </div>
         )}
-        {transcriptionLabel(call.transcription_status) && (
-          <p className="text-xs text-muted-foreground">{transcriptionLabel(call.transcription_status)}</p>
+        {call.transcription_status === 'en_attente' && (
+          <p className="text-xs text-muted-foreground">Transcription en cours…</p>
         )}
-
-        {canCallBack && (
-          <div className="flex flex-wrap gap-2 pt-1">
-            {settings.forwardingNumber2 ? (
-              <>
-                <Button variant="outline" size="sm" onClick={() => callBack(1)} disabled={calling}>
-                  <Phone className="size-4" /> Rappeler · Tél. 1
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => callBack(2)} disabled={calling}>
-                  <Phone className="size-4" /> Rappeler · Tél. 2
-                </Button>
-              </>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => callBack(1)} disabled={calling}>
-                <Phone className="size-4" /> {calling ? 'Appel…' : 'Rappeler'}
-              </Button>
-            )}
+        {call.recording_url && !call.transcription && !call.transcription_status && !hasOpenaiKey && (
+          <p className="text-xs text-muted-foreground">Transcription non activée.</p>
+        )}
+        {call.transcription_status === 'erreur' && hasOpenaiKey && (
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-muted-foreground">Transcription indisponible.</p>
+            <Button variant="outline" size="sm" onClick={retry} disabled={retrying}>
+              {retrying ? 'Relance…' : 'Réessayer'}
+            </Button>
           </div>
         )}
-        {message && <p className="text-xs text-muted-foreground">{message}</p>}
+
+        {number && /^\+?\d[\d\s.]{5,}$/.test(number) && (
+          <div className="pt-1">
+            <Button variant="outline" size="sm" asChild>
+              <a href={`tel:${number}`}>
+                <Phone className="size-4" /> Rappeler
+              </a>
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
 }
 
-// Onglet Appels : historique entrant/sortant, écoute, transcription,
-// rappel avec le 01, et lien vers la fiche créée automatiquement.
-export function CallsPanel({ settings }: { settings: TelephonySettings }) {
+// Journal des appels : écoute, transcription, rappel et lien vers la fiche
+// créée automatiquement. Se rafraîchit en direct dès qu'un appel arrive.
+export function CallsPanel({ hasOpenaiKey, refreshKey }: { hasOpenaiKey: boolean; refreshKey: number }) {
   const { session } = useAuth()
   const [calls, setCalls] = React.useState<CallRecord[] | null>(null)
   const [error, setError] = React.useState<string | null>(null)
@@ -133,13 +123,16 @@ export function CallsPanel({ settings }: { settings: TelephonySettings }) {
   const load = React.useCallback(() => {
     if (!session) return
     listCalls(session.sessionId)
-      .then(setCalls)
+      .then((rows) => {
+        setCalls(rows)
+        setError(null)
+      })
       .catch((e) => setError(friendlyError(e, 'Erreur de chargement.')))
   }, [session])
 
   React.useEffect(() => {
     load()
-  }, [load])
+  }, [load, refreshKey])
 
   useLiveEvents(['call_update'], load)
 
@@ -148,7 +141,7 @@ export function CallsPanel({ settings }: { settings: TelephonySettings }) {
       {error && <p className="text-sm text-destructive">{error}</p>}
       {!calls && !error && <Loader className="py-8" />}
       {calls && calls.length === 0 && <EmptyState label="Aucun appel pour l'instant" />}
-      {calls?.map((c) => <CallCard key={c.id} call={c} settings={settings} />)}
+      {calls?.map((c) => <CallCard key={c.id} call={c} hasOpenaiKey={hasOpenaiKey} onChanged={load} />)}
     </div>
   )
 }

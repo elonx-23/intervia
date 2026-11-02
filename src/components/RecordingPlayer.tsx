@@ -3,11 +3,11 @@ import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
 
-// L'enregistrement vit chez Twilio, protégé par Basic Auth (identifiants de
-// l'équipe, jamais exposés au navigateur) — impossible de le pointer
-// directement en src= d'un <audio> comme une image publique. On le récupère
-// en blob via un fetch authentifié (même header x-session-id que le reste de
-// l'app) à la demande, pas au chargement de la page.
+// L'enregistrement vit chez OVH et n'est accessible que via la route
+// authentifiée de l'app (réservée aux admins de l'équipe) — impossible de le
+// pointer directement en src= d'un <audio> comme une image publique, le
+// navigateur n'enverrait pas le header x-session-id. On le récupère en blob
+// via un fetch authentifié, à la demande, pas au chargement de la page.
 export function RecordingPlayer({ callId, sessionId }: { callId: string; sessionId: string }) {
   const [url, setUrl] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(false)

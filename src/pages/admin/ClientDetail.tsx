@@ -19,7 +19,6 @@ import {
   type PseDocument,
 } from '@/lib/documents'
 import { friendlyError } from '@/lib/errors'
-import { getTelephonySettings, placeCall } from '@/lib/telephony'
 
 // Même règle d'identification que côté serveur (téléphone en priorité, sinon
 // nom + adresse) — dupliquée ici volontairement, c'est une comparaison
@@ -40,30 +39,6 @@ export default function ClientDetail() {
   const [client, setClient] = React.useState<ClientSummary | null>(null)
   const [documents, setDocuments] = React.useState<PseDocument[] | null>(null)
   const [error, setError] = React.useState<string | null>(null)
-  const [calling, setCalling] = React.useState(false)
-  const [callMsg, setCallMsg] = React.useState<string | null>(null)
-  const [hasSecondPhone, setHasSecondPhone] = React.useState(false)
-
-  React.useEffect(() => {
-    if (!session) return
-    getTelephonySettings(session.sessionId)
-      .then((s) => setHasSecondPhone(Boolean(s.forwardingNumber2)))
-      .catch(() => {})
-  }, [session])
-
-  const call = async (ring: 1 | 2) => {
-    if (!session || !client?.phone) return
-    setCalling(true)
-    setCallMsg(null)
-    try {
-      await placeCall(session.sessionId, client.phone, ring)
-      setCallMsg(`Le téléphone ${ring} va sonner — décroche pour être mis en relation avec le client.`)
-    } catch (e) {
-      setCallMsg(friendlyError(e, "Erreur lors de l'appel."))
-    } finally {
-      setCalling(false)
-    }
-  }
 
   React.useEffect(() => {
     if (!session || !key) return
@@ -106,23 +81,13 @@ export default function ClientDetail() {
             {client.phone && (
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm text-muted-foreground">{client.phone}</p>
-                {hasSecondPhone ? (
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => call(1)} disabled={calling}>
-                      <Phone className="size-4" /> Tél. 1
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => call(2)} disabled={calling}>
-                      <Phone className="size-4" /> Tél. 2
-                    </Button>
-                  </div>
-                ) : (
-                  <Button variant="outline" size="sm" onClick={() => call(1)} disabled={calling}>
-                    <Phone className="size-4" /> {calling ? 'Appel…' : 'Appeler'}
-                  </Button>
-                )}
+                <Button variant="outline" size="sm" asChild>
+                  <a href={`tel:${client.phone}`}>
+                    <Phone className="size-4" /> Appeler
+                  </a>
+                </Button>
               </div>
             )}
-            {callMsg && <p className="text-xs text-muted-foreground">{callMsg}</p>}
             {client.address && <p className="text-sm text-muted-foreground">{client.address}</p>}
             <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
               <p>

@@ -1,69 +1,97 @@
-import { Hash, PhoneCall, Settings2 } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import * as React from 'react'
-import { useSearchParams } from 'react-router-dom'
 
 import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
-import { SegmentedControl } from '@/components/ui/segmented-control'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth'
 import { friendlyError } from '@/lib/errors'
-import { getTelephonySettings, type TelephonySettings } from '@/lib/telephony'
+import { formatPhone, getTelephonyStatus, syncCalls, type TelephonyStatus } from '@/lib/telephony'
 
 import { CallsPanel } from './CallsPanel'
-import { NumbersPanel } from './NumbersPanel'
-import { SettingsPanel } from './SettingsPanel'
 
-type Tab = 'appels' | 'numeros' | 'reglages'
-
-// L'espace Téléphonie, à part du reste de l'app : appels, numéros, réglages.
-// L'onglet actif vit dans l'URL (?onglet=…) pour qu'un lien ou un retour
-// arrière ramène au bon endroit.
+// L'espace Téléphonie, à part du reste de l'app : les appels reçus sur le
+// numéro 01 (écoute, transcription, fiche créée toute seule) et l'état de la
+// ligne. La ligne elle-même (numéros, renvoi vers les deux téléphones) se
+// gère chez OVH, pas ici.
 export default function TelephonyHub() {
   const { session } = useAuth()
-  const [params, setParams] = useSearchParams()
-  const [settings, setSettings] = React.useState<TelephonySettings | null>(null)
+  const [status, setStatus] = React.useState<TelephonyStatus | null>(null)
   const [error, setError] = React.useState<string | null>(null)
+  const [refreshing, setRefreshing] = React.useState(false)
+  const [refreshKey, setRefreshKey] = React.useState(0)
 
-  const raw = params.get('onglet')
-  const tab: Tab = raw === 'numeros' || raw === 'reglages' ? raw : 'appels'
-
-  const loadSettings = React.useCallback(() => {
+  const loadStatus = React.useCallback(() => {
     if (!session) return
-    getTelephonySettings(session.sessionId)
-      .then(setSettings)
+    getTelephonyStatus(session.sessionId)
+      .then(setStatus)
       .catch((e) => setError(friendlyError(e, 'Erreur de chargement.')))
   }, [session])
 
   React.useEffect(() => {
-    loadSettings()
-  }, [loadSettings])
+    loadStatus()
+  }, [loadStatus])
 
-  // Tant que rien n'est configuré, on ouvre directement les Réglages.
-  React.useEffect(() => {
-    if (settings && !settings.configured && !raw) setParams({ onglet: 'reglages' }, { replace: true })
-  }, [settings, raw, setParams])
+  const refresh = async () => {
+    if (!session) return
+    setRefreshing(true)
+    try {
+      await syncCalls(session.sessionId)
+      loadStatus()
+      setRefreshKey((k) => k + 1)
+    } catch (e) {
+      setError(friendlyError(e, "Erreur lors de l'actualisation."))
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   return (
     <Page title="Téléphonie">
       <div className="flex flex-col gap-4">
-        <SegmentedControl<Tab>
-          value={tab}
-          onChange={(v) => setParams({ onglet: v }, { replace: true })}
-          options={[
-            { value: 'appels', label: 'Appels', icon: PhoneCall },
-            { value: 'numeros', label: 'Numéros', icon: Hash },
-            { value: 'reglages', label: 'Réglages', icon: Settings2 },
-          ]}
-        />
-
         {error && <p className="text-sm text-destructive">{error}</p>}
-        {!settings && !error && <Loader className="py-8" />}
+        {!status && !error && <Loader className="py-8" />}
 
-        {settings && tab === 'appels' && <CallsPanel settings={settings} />}
-        {settings && tab === 'numeros' && <NumbersPanel settings={settings} onChanged={loadSettings} />}
-        {settings && tab === 'reglages' && (
-          <SettingsPanel key={settings.accountSid + settings.forwardingNumber} settings={settings} onSaved={loadSettings} />
+        {status && (
+          <Card>
+            <CardContent className="flex items-center justify-between gap-3">
+              <div className="min-w-0 text-sm">
+                {!status.configured ? (
+                  <>
+                    <p className="font-medium">Ligne non branchée</p>
+                    <p className="text-muted-foreground">La téléphonie n'est pas encore branchée sur ton compte.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium">
+                      {status.numbers.length > 0
+                        ? status.numbers.map((n) => formatPhone(n)).join(' · ')
+                        : 'Aucun numéro actif chez OVH'}
+                    </p>
+                    {status.lastSyncError ? (
+                      <p className="text-destructive">{status.lastSyncError}</p>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        {status.lastSyncAt
+                          ? `Mis à jour à ${new Date(status.lastSyncAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+                          : 'Première mise à jour en cours…'}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+              {status.configured && (
+                <Button variant="outline" size="sm" onClick={refresh} disabled={refreshing} aria-label="Actualiser les appels">
+                  {refreshing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                  Actualiser
+                </Button>
+              )}
+            </CardContent>
+          </Card>
         )}
+
+        {status && <CallsPanel hasOpenaiKey={status.hasOpenaiKey} refreshKey={refreshKey} />}
       </div>
     </Page>
   )

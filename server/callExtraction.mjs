@@ -3,6 +3,7 @@ import OpenAI from 'openai'
 import { db, now, uuid } from './db.mjs'
 import { broadcast } from './events.mjs'
 import { notifyAdmin } from './notify.mjs'
+import { toFrenchNational } from './phone.mjs'
 import { nextReference } from './routes/interventions.mjs'
 
 // Corps de métier : mêmes libellés que les modèles d'articles du frontend
@@ -84,15 +85,6 @@ export async function createInterventionFromCall({ callId, transcription, openai
 
   if (!extracted?.is_intervention_request) return null
   return insertInterventionFromExtraction(call, extracted)
-}
-
-// Twilio donne le numéro appelant au format international (+33612345678) ;
-// toutes les fiches existantes sont au format français (0612345678), et la
-// liste Clients regroupe par numéro exact — sans conversion, le même client
-// apparaîtrait en double.
-function toFrenchNational(number) {
-  if (number && /^\+33\d{9}$/.test(number)) return `0${number.slice(3)}`
-  return number ?? null
 }
 
 // Séparé de l'appel OpenAI pour pouvoir être testé avec une extraction

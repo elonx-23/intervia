@@ -121,7 +121,7 @@ function AppRoutes() {
                 <Route path="/appels" element={<Navigate to="/telephonie" replace />} />
                 <Route path="/reglages/entreprise" element={<CompanySettings />} />
                 <Route path="/reglages/emails" element={<EmailTextsSettings />} />
-                <Route path="/reglages/telephonie" element={<Navigate to="/telephonie?onglet=reglages" replace />} />
+                <Route path="/reglages/telephonie" element={<Navigate to="/telephonie" replace />} />
                 <Route path="/reglages/region" element={<RegionSettings />} />
                 <Route path="/reglages/securite" element={<SecuritySettings />} />
                 <Route path="/reglages/sauvegardes" element={<BackupSettings />} />

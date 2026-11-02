@@ -68,7 +68,7 @@ export default function Settings() {
             <SettingsRow to="/techniciens" icon={Users} label="Techniciens" />
             <SettingsRow to="/reglages/entreprise" icon={Building2} label="Entreprise" />
             <SettingsRow to="/reglages/emails" icon={Mail} label="Emails" />
-            <SettingsRow to="/telephonie?onglet=reglages" icon={Phone} label="Téléphonie" />
+            <SettingsRow to="/telephonie" icon={Phone} label="Téléphonie" />
             <SettingsRow to="/reglages/region" icon={Globe} label="Région" />
             <SettingsRow to="/reglages/sauvegardes" icon={Database} label="Sauvegardes" />
             <SettingsRow to="/reglages/securite" icon={ShieldCheck} label="Sécurité" />

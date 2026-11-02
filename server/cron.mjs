@@ -5,6 +5,7 @@ import { sendMail } from './mailer.mjs'
 import { runScheduledBackup } from './backup.mjs'
 import { deliverPendingPush } from './push.mjs'
 import { generateDocumentPdfBuffer } from './pdf.mjs'
+import { syncAllTeams } from './telephonySync.mjs'
 import { wrapEmail, ctaButton, fallbackLink } from './emailTemplates.mjs'
 
 // Utilisée pour construire le lien de consultation dans les emails envoyés
@@ -150,6 +151,8 @@ export function startCronJobs() {
   cron.schedule('0 19 * * *', runDailyServiceMessage, { timezone: 'Europe/Paris' })
   cron.schedule('0 9 * * *', runAutoRelances, { timezone: 'Europe/Paris' })
   cron.schedule('* * * * *', deliverPendingPush)
+  // Relève chez OVH les appels enregistrés (pas de webhook côté OVH).
+  cron.schedule('* * * * *', syncAllTeams)
   cron.schedule('*/30 * * * *', runNotificationsCleanup)
   cron.schedule('0 4 * * *', runLoginAttemptsCleanup, { timezone: 'Europe/Paris' })
   // Sauvegarde complète de la base en pleine nuit, hors heures de service.
