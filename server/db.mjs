@@ -215,6 +215,26 @@ db.exec(`
     ip TEXT,
     created_at TEXT NOT NULL
   );
+
+  -- Téléphonie (Twilio) : un appel par ligne, entrant (reçu sur le numéro de
+  -- l'équipe, renvoyé vers le mobile de l'admin) ou sortant (déclenché depuis
+  -- une fiche client, ponté vers le mobile de l'admin). La transcription est
+  -- remplie en différé par le webhook d'enregistrement, pas à la création.
+  CREATE TABLE IF NOT EXISTS calls (
+    id TEXT PRIMARY KEY,
+    team_id TEXT REFERENCES teams(id),
+    direction TEXT NOT NULL,
+    from_number TEXT,
+    to_number TEXT,
+    status TEXT NOT NULL DEFAULT 'en-cours',
+    duration_seconds INTEGER,
+    twilio_call_sid TEXT,
+    recording_url TEXT,
+    transcription TEXT,
+    transcription_status TEXT,
+    started_at TEXT NOT NULL,
+    ended_at TEXT
+  );
 `)
 
 // Migrations légères : ALTER TABLE tenté à chaque démarrage, l'erreur
@@ -274,6 +294,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_login_attempts_identifier ON login_attempts (identifier, created_at);
   CREATE INDEX IF NOT EXISTS idx_team_memberships_user ON team_memberships (user_id);
   CREATE INDEX IF NOT EXISTS idx_team_memberships_team ON team_memberships (team_id);
+  CREATE INDEX IF NOT EXISTS idx_calls_team ON calls (team_id, started_at);
+  CREATE INDEX IF NOT EXISTS idx_calls_sid ON calls (twilio_call_sid);
 `)
 
 // Un compte technicien déjà rattaché à une équipe (via l'ancien /join, avant

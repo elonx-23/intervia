@@ -22,6 +22,7 @@ import { settingsRouter } from './routes/settings.mjs'
 import { eventsRouter } from './routes/events.mjs'
 import { backupsRouter } from './routes/backups.mjs'
 import { reportsRouter } from './routes/reports.mjs'
+import { telephonyRouter } from './routes/telephony.mjs'
 import { startCronJobs } from './cron.mjs'
 import { rateLimit } from './rateLimit.mjs'
 
@@ -78,6 +79,7 @@ app.use('/api/settings', settingsRouter)
 app.use('/api/events', eventsRouter)
 app.use('/api/backups', backupsRouter)
 app.use('/api/reports', reportsRouter)
+app.use('/api/telephony', telephonyRouter)
 
 // Sert le frontend buildé (npm run build → dist/) depuis ce même serveur,
 // sur le même port/origine que l'API — c'est ce que suppose déjà le

@@ -46,6 +46,7 @@ const PrivacySettings = React.lazy(() => import('@/pages/settings/PrivacySetting
 const RegionSettings = React.lazy(() => import('@/pages/settings/RegionSettings'))
 const SecuritySettings = React.lazy(() => import('@/pages/settings/SecuritySettings'))
 const SubscriptionSettings = React.lazy(() => import('@/pages/settings/SubscriptionSettings'))
+const TelephonySettings = React.lazy(() => import('@/pages/settings/TelephonySettings'))
 const TermsSettings = React.lazy(() => import('@/pages/settings/TermsSettings'))
 const ThemeSettings = React.lazy(() => import('@/pages/settings/ThemeSettings'))
 const Statistiques = React.lazy(() => import('@/pages/Statistiques'))
@@ -118,6 +119,7 @@ function AppRoutes() {
                 <Route path="/clients/:key" element={<ClientDetail />} />
                 <Route path="/reglages/entreprise" element={<CompanySettings />} />
                 <Route path="/reglages/emails" element={<EmailTextsSettings />} />
+                <Route path="/reglages/telephonie" element={<TelephonySettings />} />
                 <Route path="/reglages/region" element={<RegionSettings />} />
                 <Route path="/reglages/securite" element={<SecuritySettings />} />
                 <Route path="/reglages/sauvegardes" element={<BackupSettings />} />
