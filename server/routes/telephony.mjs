@@ -14,22 +14,36 @@ export const telephonyRouter = Router()
 // a besoin de son propre parseur pour lire req.body sur ces appels.
 telephonyRouter.use(express.urlencoded({ extended: false }))
 
-const PUBLIC_URL = process.env.PUBLIC_URL ?? 'http://localhost:5173'
+// Adresse publique de l'app pour les webhooks Twilio. Retenue
+// automatiquement depuis le navigateur de l'admin (en-tête Origin, ex.
+// https://app.intervia.info) quand il enregistre ses réglages ou achète un
+// numéro — plus besoin de configurer PUBLIC_URL côté hébergeur, qui ne
+// sert plus que de repli.
+function baseUrlFor(teamId) {
+  return getTwilioCredentials(teamId)?.publicBaseUrl || process.env.PUBLIC_URL || 'http://localhost:5173'
+}
 
-function webhookUrl(path) {
-  return `${PUBLIC_URL}${path}`
+function webhookUrl(teamId, path) {
+  return `${baseUrlFor(teamId)}${path}`
+}
+
+function rememberPublicBaseUrl(req) {
+  const origin = req.get('origin')
+  if (origin && /^https:\/\/[^/]+$/.test(origin)) {
+    setTwilioCredentials(req.caller.team_id, { publicBaseUrl: origin })
+  }
 }
 
 // Vérifie que l'appel vient réellement de Twilio (signature HMAC du corps +
 // de l'URL complète avec l'auth token de l'équipe) — sans ça, n'importe qui
 // connaissant l'URL du webhook pourrait injecter de faux appels/statuts.
-// Construite à partir de PUBLIC_URL (jamais req.protocol/req.get('host')) :
-// Railway est derrière un proxy, ces valeurs ne reflètent pas forcément
-// l'URL https publique que Twilio a réellement signée.
+// Construite à partir de l'adresse publique retenue (jamais
+// req.protocol/req.get('host')) : Railway est derrière un proxy, ces valeurs
+// ne reflètent pas forcément l'URL https que Twilio a réellement signée.
 function verifyTwilioSignature(req, teamId) {
   const creds = getTwilioCredentials(teamId)
   if (!creds?.authToken) return false
-  const url = webhookUrl(req.originalUrl)
+  const url = webhookUrl(teamId, req.originalUrl)
   const signature = req.headers['x-twilio-signature']
   return Twilio.validateRequest(creds.authToken, signature, url, req.body)
 }
@@ -87,9 +101,9 @@ telephonyRouter.post('/voice/:teamId', (req, res) => {
   // seule la jambe décrochée est facturée à la minute.
   const dial = twiml.dial({
     record: 'record-from-answer',
-    recordingStatusCallback: webhookUrl(`/api/telephony/recording/${teamId}?callId=${callId}`),
+    recordingStatusCallback: webhookUrl(teamId, `/api/telephony/recording/${teamId}?callId=${callId}`),
     recordingStatusCallbackMethod: 'POST',
-    action: webhookUrl(`/api/telephony/status/${teamId}?callId=${callId}`),
+    action: webhookUrl(teamId, `/api/telephony/status/${teamId}?callId=${callId}`),
     method: 'POST',
     timeout: 25,
   })
@@ -163,9 +177,9 @@ telephonyRouter.post('/voice/outbound-bridge/:teamId', (req, res) => {
     twiml.dial(
       {
         record: 'record-from-answer',
-        recordingStatusCallback: webhookUrl(`/api/telephony/recording/${teamId}?callId=${callId}`),
+        recordingStatusCallback: webhookUrl(teamId, `/api/telephony/recording/${teamId}?callId=${callId}`),
         recordingStatusCallbackMethod: 'POST',
-        action: webhookUrl(`/api/telephony/status/${teamId}?callId=${callId}`),
+        action: webhookUrl(teamId, `/api/telephony/status/${teamId}?callId=${callId}`),
         method: 'POST',
       },
       target,
@@ -197,6 +211,7 @@ telephonyRouter.get('/settings', requireAdmin, (req, res) => {
 
 telephonyRouter.patch('/settings', requireAdmin, (req, res) => {
   const { accountSid, authToken, phoneNumber, forwardingNumber, forwardingNumber2, openaiApiKey } = req.body ?? {}
+  rememberPublicBaseUrl(req)
   setTwilioCredentials(req.caller.team_id, {
     accountSid,
     authToken: authToken || undefined,
@@ -249,11 +264,12 @@ telephonyRouter.post('/numbers/buy', requireAdmin, async (req, res) => {
   if (!phoneNumber) return res.status(400).json({ error: 'Numéro manquant.' })
   const client = getTwilioClient(req.caller.team_id)
   if (!client) return res.status(400).json({ error: 'Twilio non configuré.' })
+  rememberPublicBaseUrl(req)
 
   try {
     const bought = await client.incomingPhoneNumbers.create({
       phoneNumber,
-      voiceUrl: webhookUrl(`/api/telephony/voice/${req.caller.team_id}`),
+      voiceUrl: webhookUrl(req.caller.team_id, `/api/telephony/voice/${req.caller.team_id}`),
       voiceMethod: 'POST',
     })
     setTwilioCredentials(req.caller.team_id, { phoneNumber: bought.phoneNumber })
@@ -292,6 +308,7 @@ telephonyRouter.delete('/numbers/:sid', requireAdmin, async (req, res) => {
 telephonyRouter.post('/call', requireAdmin, async (req, res) => {
   const to = toE164(req.body?.to)
   if (!to) return res.status(400).json({ error: 'Numéro manquant.' })
+  rememberPublicBaseUrl(req)
   const client = getTwilioClient(req.caller.team_id)
   const creds = getTwilioCredentials(req.caller.team_id)
   // Un appel sortant fait sonner UN seul des deux téléphones (celui de la
@@ -306,7 +323,7 @@ telephonyRouter.post('/call', requireAdmin, async (req, res) => {
     const call = await client.calls.create({
       to: ringFirst,
       from: creds.phoneNumber,
-      url: webhookUrl(`/api/telephony/voice/outbound-bridge/${req.caller.team_id}?callId=${callId}&target=${encodeURIComponent(to)}`),
+      url: webhookUrl(req.caller.team_id, `/api/telephony/voice/outbound-bridge/${req.caller.team_id}?callId=${callId}&target=${encodeURIComponent(to)}`),
       method: 'POST',
     })
     db.prepare(

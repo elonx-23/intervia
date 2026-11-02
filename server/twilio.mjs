@@ -40,7 +40,7 @@ export function isTelephonyConfigured(teamId) {
 // Téléphonie.
 export function setTwilioCredentials(
   teamId,
-  { accountSid, authToken, phoneNumber, forwardingNumber, forwardingNumber2, openaiApiKey },
+  { accountSid, authToken, phoneNumber, forwardingNumber, forwardingNumber2, openaiApiKey, publicBaseUrl },
 ) {
   const existing = resolveCredentials(teamId) ?? {}
   setSetting(
@@ -52,6 +52,7 @@ export function setTwilioCredentials(
       forwardingNumber: forwardingNumber !== undefined ? forwardingNumber : existing.forwardingNumber,
       forwardingNumber2: forwardingNumber2 !== undefined ? forwardingNumber2 : existing.forwardingNumber2,
       openaiApiKey: openaiApiKey !== undefined ? openaiApiKey : existing.openaiApiKey,
+      publicBaseUrl: publicBaseUrl !== undefined ? publicBaseUrl : existing.publicBaseUrl,
     },
     teamId,
   )
