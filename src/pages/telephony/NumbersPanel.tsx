@@ -298,7 +298,7 @@ function BuyNumber({
   const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    if (!session || query.trim().length < 2) {
+    if (!session || query.trim().length < 3) {
       setZones([])
       return
     }
@@ -389,7 +389,7 @@ function BuyNumber({
             ))}
           </div>
         )}
-        {query.trim().length >= 2 && zones.length === 0 && !zone && <p className="text-xs text-muted-foreground">Aucune ville trouvée.</p>}
+        {query.trim().length >= 3 && zones.length === 0 && !zone && <p className="text-xs text-muted-foreground">Aucune ville trouvée.</p>}
 
         {zone && (
           <div className="flex flex-col gap-3">

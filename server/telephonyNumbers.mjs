@@ -138,20 +138,34 @@ const asQuery = (params) => Object.fromEntries(Object.entries(params).map(([k, v
 // ---------- Recherche (catalogue public, rien n'est commandé) ----------
 
 export async function searchZones(axiom) {
+  // L'opérateur exige au moins 3 caractères (« Pa » est refusé).
+  if (axiom && axiom.replace(/[^\p{L}\p{N}]/gu, '').length < 3) return []
   const zones = await operatorPublicGet('/telephony/number/zones', { country: 'fr', ...(axiom ? { axiom } : {}) })
   return zones.slice(0, 50)
 }
 
-// Numéros libres d'une ville. Une bonne partie du catalogue est « premium »
-// (numéros plus faciles à retenir, plus chers) : on les signale et on montre
-// les numéros standards en premier pour que le surcoût ne soit jamais une surprise.
+// Numéros libres d'une ville. Le catalogue liste aussi des numéros « premium »
+// que la commande refuse ensuite (« no longer available », vu en production
+// sur les deux premiers numéros premium de Paris) : on ne propose donc que les
+// numéros standards.
 export async function availableNumbers(zone) {
   if (!zone) throw new UserError('Choisis une ville.')
   const list = await operatorPublicGet('/telephony/number/specificNumbers', { country: 'fr', type: 'geographic', zone })
   return list
+    .filter((n) => !n.isPremium)
     .slice(0, 200)
-    .map((n) => ({ number: n.number, premium: Boolean(n.isPremium) }))
-    .sort((a, b) => Number(a.premium) - Number(b.premium))
+    .map((n) => ({ number: n.number, premium: false }))
+}
+
+// Le numéro choisi a été pris entre-temps (ou n'était pas réellement libre) :
+// message clair plutôt que l'erreur brute de l'opérateur.
+function numberGoneOrThrow(e, choice) {
+  if (choice.specificNumber && e instanceof OperatorError && /no(t)? longer available|not available/i.test(e.message)) {
+    throw new UserError(
+      "Ce numéro n'est plus disponible. Choisis-en un autre dans la liste, ou prends « Numéro attribué automatiquement ».",
+    )
+  }
+  throw e
 }
 
 // Indicatif national d'un numéro (« 01 » … « 05 ») : un numéro géographique ne
@@ -316,7 +330,7 @@ export async function quoteNumber(teamId, choice) {
     c,
     `/order/telephony/${enc(billingAccount)}/numberGeographic`,
     asQuery(orderParams(legal, choice)),
-  )
+  ).catch((e) => numberGoneOrThrow(e, choice))
   return summarizeOrder(order)
 }
 
@@ -335,13 +349,13 @@ export async function orderNumber(teamId, choice, expectedTotal) {
 
     const params = orderParams(legal, choice)
     const path = `/order/telephony/${enc(billingAccount)}/numberGeographic`
-    const quote = summarizeOrder(await operatorGet(c, path, asQuery(params)))
+    const quote = summarizeOrder(await operatorGet(c, path, asQuery(params)).catch((e) => numberGoneOrThrow(e, choice)))
     if (typeof expectedTotal !== 'number' || Math.abs(quote.totalTtc.value - expectedTotal) > 0.005) {
       throw new UserError(`Le prix a changé (${euros(quote.totalTtc.value)} TTC). Vérifie-le puis confirme à nouveau.`)
     }
 
     const numbersBefore = await currentNumbers(c)
-    const order = await operatorPost(c, path, params)
+    const order = await operatorPost(c, path, params).catch((e) => numberGoneOrThrow(e, choice))
     const outcome = await settle(c, order, quote.totalTtc.value)
     insertOrder(teamId, {
       kind: 'number',
