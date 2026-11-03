@@ -54,7 +54,24 @@ export function SettingsPanel({ onSaved }: { onSaved: () => void }) {
 
   const setLegal = (key: keyof LegalInfo, value: string) => setForm((f) => (f ? { ...f, legal: { ...f.legal, [key]: value } } : f))
   const isIndividual = form.legal.legalform === 'individual'
-  const siretDigits = form.legal.siret.replace(/s/g, '')
+  // Mêmes règles que le serveur (missingLegalFields) : l'erreur se voit ici,
+  // au moment de la saisie, plutôt qu'au moment d'acheter un numéro.
+  const siretDigits = form.legal.siret.replace(/\D/g, '')
+  const siretHint =
+    siretDigits.length > 0 && siretDigits.length !== 14
+      ? `Il faut les 14 chiffres du SIRET (tu en as ${siretDigits.length}${siretDigits.length === 9 ? ' : c\'est le SIREN' : ''}).`
+      : !isIndividual && siretDigits.length === 0
+        ? 'Obligatoire pour une société : 14 chiffres, sur ton Kbis ou avis de situation INSEE.'
+        : undefined
+  const legalPhone = form.legal.phone.replace(/\(0\)/g, '').replace(/[\s.\-()]/g, '')
+  const phoneHint =
+    legalPhone.length === 0
+      ? form.forwardingNumber.trim()
+        ? 'Vide : le téléphone 1 sera utilisé.'
+        : 'Obligatoire : un numéro français (06 12 34 56 78).'
+      : /^(?:\+33|0033|0)[1-9]\d{8}$/.test(legalPhone)
+        ? undefined
+        : 'Numéro français attendu, par exemple 06 12 34 56 78.'
 
   const save = async () => {
     if (!session) return
@@ -64,6 +81,7 @@ export function SettingsPanel({ onSaved }: { onSaved: () => void }) {
     try {
       await updateTelephonySettings(session.sessionId, form)
       setSaved(true)
+      setForm((f) => (f ? { ...f, legalSaved: true } : f))
       setTimeout(() => setSaved(false), 2500)
       onSaved()
     } catch (e) {
@@ -129,6 +147,11 @@ export function SettingsPanel({ onSaved }: { onSaved: () => void }) {
               l'attribution de tes numéros.
             </p>
           </div>
+          {form.legalSaved === false && (
+            <p className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-xs">
+              Préremplie avec ta fiche entreprise mais pas encore enregistrée : vérifie puis appuie sur « Enregistrer » en bas.
+            </p>
+          )}
           <Field label="Forme juridique">
             <Select value={form.legal.legalform || undefined} onValueChange={(v) => setLegal('legalform', v)}>
               <SelectTrigger>
@@ -149,7 +172,7 @@ export function SettingsPanel({ onSaved }: { onSaved: () => void }) {
           <div className="grid grid-cols-2 gap-3">
             <Field
               label={isIndividual ? 'SIRET (facultatif)' : 'SIRET'}
-              hint={siretDigits.length > 0 && siretDigits.length !== 14 ? 'Il faut les 14 chiffres du SIRET (pas seulement le SIREN).' : undefined}
+              hint={siretHint}
             >
               <Input inputMode="numeric" value={form.legal.siret} onChange={(e) => setLegal('siret', e.target.value)} placeholder="14 chiffres" />
             </Field>
@@ -169,8 +192,9 @@ export function SettingsPanel({ onSaved }: { onSaved: () => void }) {
             <Field label="E-mail">
               <Input type="email" value={form.legal.email} onChange={(e) => setLegal('email', e.target.value)} />
             </Field>
-            <Field label="Téléphone">
-              <Input type="tel" inputMode="tel" value={form.legal.phone} onChange={(e) => setLegal('phone', e.target.value)} />
+            <Field label="Téléphone du contact" hint={phoneHint}>
+              <Input
+                placeholder="06 12 34 56 78" type="tel" inputMode="tel" value={form.legal.phone} onChange={(e) => setLegal('phone', e.target.value)} />
             </Field>
           </div>
           <div className="grid grid-cols-[5rem_1fr] gap-3">

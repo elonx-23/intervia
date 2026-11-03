@@ -101,6 +101,7 @@ telephonyRouter.get('/settings', (req, res) => {
     forwardingNumber: cfg.forwardingNumber ?? '',
     forwardingNumber2: cfg.forwardingNumber2 ?? '',
     legal: cfg.legal ?? prefillLegal(teamId),
+    legalSaved: Boolean(cfg.legal),
     recordingAccepted: Boolean(cfg.recordingAccepted),
   })
 })

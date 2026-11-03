@@ -46,9 +46,23 @@ export function errorForScreen(e) {
 // ---------- Numéros de téléphone ----------
 
 // Numéro français valide (fixe ou mobile) en +33…, sinon null.
+// Tolère les écritures courantes : « 06 12 34 56 78 », « 06.12… », « +33 6… »,
+// « +33 (0)6… », « 0033 6… ».
 export function normalizeFrenchPhone(raw) {
-  const e164 = toE164(raw)
+  const e164 = toE164(String(raw ?? '').replace(/\(0\)/g, ''))
   return e164 && /^\+33[1-9]\d{8}$/.test(e164) ? e164 : null
+}
+
+// SIRET réduit à ses chiffres : « 123 456 789 00012 », « 123.456.789.00012 »
+// ou « 123-456-789-00012 » sont acceptés tels que l'admin les a tapés.
+const siretDigits = (raw) => String(raw ?? '').replace(/\D/g, '')
+
+// Informations du titulaire telles qu'utilisées pour la commande : si le
+// téléphone du contact est vide, on reprend le premier téléphone de renvoi.
+export function effectiveLegal(cfg) {
+  const legal = { ...(cfg?.legal ?? {}) }
+  if (!String(legal.phone ?? '').trim() && cfg?.forwardingNumber) legal.phone = cfg.forwardingNumber
+  return legal
 }
 
 // Format attendu par l'opérateur pour un numéro appelé : 0033612345678.
@@ -63,23 +77,23 @@ export const LEGAL_FORMS = new Set(['individual', 'corporation', 'association', 
 
 export function missingLegalFields(legal) {
   const l = legal ?? {}
-  const siret = String(l.siret ?? '').replace(/\s/g, '')
+  const siret = siretDigits(l.siret)
   const missing = []
   if (!LEGAL_FORMS.has(l.legalform)) missing.push('forme juridique')
   if (!String(l.firstname ?? '').trim()) missing.push('prénom')
   if (!String(l.name ?? '').trim()) missing.push('nom')
   if (!/^\S+@\S+\.\S+$/.test(String(l.email ?? ''))) missing.push('e-mail')
-  if (!normalizeFrenchPhone(l.phone)) missing.push('téléphone')
+  if (!normalizeFrenchPhone(l.phone)) missing.push('téléphone du contact')
   if (!String(l.streetName ?? '').trim()) missing.push('adresse')
   if (!/^\d{5}$/.test(String(l.zip ?? ''))) missing.push('code postal')
   if (!String(l.city ?? '').trim()) missing.push('ville')
   if (l.legalform !== 'individual' && !String(l.organisation ?? '').trim()) missing.push('raison sociale')
-  if ((l.legalform !== 'individual' || siret) && !/^\d{14}$/.test(siret)) missing.push('SIRET')
+  if ((l.legalform !== 'individual' || siret) && !/^\d{14}$/.test(siret)) missing.push('SIRET à 14 chiffres')
   return missing
 }
 
 function legalOrThrow(teamId) {
-  const legal = getTelephonyConfig(teamId).legal
+  const legal = effectiveLegal(getTelephonyConfig(teamId))
   const missing = missingLegalFields(legal)
   if (missing.length > 0) {
     throw new UserError(`Complète d'abord les informations de l'entreprise dans Réglages (${missing.join(', ')}).`)
@@ -106,7 +120,7 @@ function orderParams(legal, { zone, specificNumber }) {
   }
   const streetNumber = String(legal.streetNumber ?? '').trim()
   const organisation = String(legal.organisation ?? '').trim()
-  const siret = String(legal.siret ?? '').replace(/\s/g, '')
+  const siret = siretDigits(legal.siret)
   const ape = String(legal.ape ?? '').trim()
   if (streetNumber) params.streetNumber = streetNumber
   if (organisation) {
@@ -652,13 +666,14 @@ export function numbersOverview(teamId) {
   const pendingAccount = orders.some((o) => o.kind === 'account' && OPEN_ORDER_STATUSES.has(o.status))
   const missing = []
   if (desired.phones.length === 0) missing.push('phone')
-  if (missingLegalFields(cfg.legal).length > 0) missing.push('legal')
+  const missingLegal = missingLegalFields(effectiveLegal(cfg))
+  if (missingLegal.length > 0) missing.push('legal')
 
   return {
     configured: isTelephonyConfigured(teamId),
     account: cfg.billingAccount ? 'ready' : pendingAccount ? 'pending' : 'none',
     missing,
-    missingLegal: missingLegalFields(cfg.legal),
+    missingLegal,
     numbers,
     orders,
   }

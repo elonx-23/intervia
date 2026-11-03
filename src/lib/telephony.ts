@@ -43,6 +43,9 @@ export interface TelephonySettings {
   forwardingNumber2: string
   legal: LegalInfo
   recordingAccepted: boolean
+  // false tant que les informations du titulaire n'ont jamais été
+  // enregistrées (le formulaire n'affiche alors qu'un préremplissage).
+  legalSaved?: boolean
 }
 
 export type TelephonySettingsInput = Partial<TelephonySettings>

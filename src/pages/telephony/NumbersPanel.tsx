@@ -357,7 +357,7 @@ function BuyNumber({
               ]
                 .filter(Boolean)
                 .join(' et ')}
-              .
+              , puis appuie sur « Enregistrer ».
             </p>
             <Button variant="outline" size="sm" className="w-fit" onClick={onMissing}>
               Ouvrir les réglages
