@@ -128,10 +128,23 @@ export async function searchZones(axiom) {
   return zones.slice(0, 50)
 }
 
+// Numéros libres d'une ville. Une bonne partie du catalogue est « premium »
+// (numéros plus faciles à retenir, plus chers) : on les signale et on montre
+// les numéros standards en premier pour que le surcoût ne soit jamais une surprise.
 export async function availableNumbers(zone) {
   if (!zone) throw new UserError('Choisis une ville.')
   const list = await operatorPublicGet('/telephony/number/specificNumbers', { country: 'fr', type: 'geographic', zone })
-  return list.slice(0, 200).map((n) => n.number)
+  return list
+    .slice(0, 200)
+    .map((n) => ({ number: n.number, premium: Boolean(n.isPremium) }))
+    .sort((a, b) => Number(a.premium) - Number(b.premium))
+}
+
+// Indicatif national d'un numéro (« 01 » … « 05 ») : un numéro géographique ne
+// commence pas toujours par 01 (Lyon et Marseille sont en 04, par exemple).
+function prefixOf(number) {
+  const m = /^(?:\+33|0033)([1-5])/.exec(String(number ?? ''))
+  return m ? `0${m[1]}` : null
 }
 
 // ---------- Compte de téléphonie ----------
@@ -320,7 +333,9 @@ export async function orderNumber(teamId, choice, expectedTotal) {
       kind: 'number',
       orderId: order.orderId,
       status: outcome.status,
-      label: choice.specificNumber ? `Numéro 01 · ${choice.zone}` : `Numéro 01 attribué · ${choice.zone}`,
+      label: choice.specificNumber
+        ? `Numéro ${prefixOf(choice.specificNumber) ?? 'fixe'} · ${choice.zone}`
+        : `Numéro fixe attribué · ${choice.zone}`,
       specificNumber: choice.specificNumber ?? null,
       numbersBefore,
       total: quote.totalTtc.value,

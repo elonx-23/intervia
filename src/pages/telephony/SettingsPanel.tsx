@@ -29,7 +29,7 @@ function Field({ label, children, hint }: { label: string; children: React.React
 }
 
 // Onglet Réglages : où sonnent les appels, enregistrement, et les
-// informations du titulaire (obligatoires pour attribuer un numéro 01).
+// informations du titulaire (obligatoires pour attribuer un numéro fixe).
 export function SettingsPanel({ onSaved }: { onSaved: () => void }) {
   const { session } = useAuth()
   const [form, setForm] = React.useState<TelephonySettings | null>(null)
@@ -125,7 +125,7 @@ export function SettingsPanel({ onSaved }: { onSaved: () => void }) {
           <div>
             <p className="text-sm font-semibold">Titulaire des numéros</p>
             <p className="text-xs text-muted-foreground">
-              La loi impose d'identifier l'entreprise à laquelle un numéro 01 est attribué. Ces informations ne servent qu'à
+              La loi impose d'identifier l'entreprise à laquelle un numéro fixe est attribué. Ces informations ne servent qu'à
               l'attribution de tes numéros.
             </p>
           </div>

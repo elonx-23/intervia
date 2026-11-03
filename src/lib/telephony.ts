@@ -97,8 +97,14 @@ export async function searchZones(sessionId: string, q: string) {
   return apiFetch<string[]>(`/api/telephony/zones?q=${encodeURIComponent(q)}`, { sessionId })
 }
 
+export interface AvailableNumber {
+  number: string
+  // Numéro « premium » : plus facile à retenir, mais plus cher.
+  premium: boolean
+}
+
 export async function listAvailableNumbers(sessionId: string, zone: string) {
-  return apiFetch<string[]>(`/api/telephony/numbers/available?zone=${encodeURIComponent(zone)}`, { sessionId })
+  return apiFetch<AvailableNumber[]>(`/api/telephony/numbers/available?zone=${encodeURIComponent(zone)}`, { sessionId })
 }
 
 export interface Price {

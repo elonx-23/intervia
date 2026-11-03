@@ -29,6 +29,7 @@ import {
   releaseNumber,
   searchZones,
   syncCalls,
+  type AvailableNumber,
   type NumberChoice,
   type NumberOrder,
   type NumberQuote,
@@ -291,7 +292,7 @@ function BuyNumber({
   const [query, setQuery] = React.useState('')
   const [zones, setZones] = React.useState<string[]>([])
   const [zone, setZone] = React.useState<string | null>(null)
-  const [numbers, setNumbers] = React.useState<string[] | null>(null)
+  const [numbers, setNumbers] = React.useState<AvailableNumber[] | null>(null)
   const [loadingNumbers, setLoadingNumbers] = React.useState(false)
   const [filter, setFilter] = React.useState('')
   const [error, setError] = React.useState<string | null>(null)
@@ -335,12 +336,16 @@ function BuyNumber({
     }
   }
 
-  const shown = (numbers ?? []).filter((n) => formatPhone(n).replace(/\s/g, '').includes(filter.replace(/\s/g, ''))).slice(0, 40)
+  const shown = (numbers ?? [])
+    .filter((n) => formatPhone(n.number).replace(/\s/g, '').includes(filter.replace(/\s/g, '')))
+    .slice(0, 40)
+  // Indicatif de la ville (01 à Paris, 04 à Lyon…), connu dès que la liste est chargée.
+  const prefix = numbers?.[0] ? formatPhone(numbers[0].number).slice(0, 2) : null
 
   return (
     <Card>
       <CardContent className="flex flex-col gap-3">
-        <p className="text-sm font-semibold">Acheter un numéro 01</p>
+        <p className="text-sm font-semibold">Acheter un numéro fixe</p>
 
         {missing.length > 0 && (
           <div className="flex flex-col gap-2 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm">
@@ -390,7 +395,9 @@ function BuyNumber({
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-2 rounded-xl border border-border/60 p-3">
               <p className="text-sm font-medium">Numéro attribué automatiquement</p>
-              <p className="text-xs text-muted-foreground">Un numéro 01 de {zone}, choisi par l'opérateur. Le prix exact s'affiche avant de payer.</p>
+              <p className="text-xs text-muted-foreground">
+                Un numéro {prefix ? `${prefix} ` : ''}standard de {zone}, choisi par l'opérateur. Le prix exact s'affiche avant de payer.
+              </p>
               <Button size="sm" className="w-fit" disabled={missing.length > 0} onClick={() => onChoose({ zone, specificNumber: null })}>
                 Acheter
               </Button>
@@ -406,11 +413,23 @@ function BuyNumber({
                 <>
                   <Input placeholder="Chercher des chiffres (ex. 1000, 77…)" value={filter} onChange={(e) => setFilter(e.target.value)} />
                   {shown.length === 0 && <p className="text-xs text-muted-foreground">Aucun numéro ne correspond.</p>}
+                  {shown.some((n) => n.premium) && (
+                    <p className="text-xs text-muted-foreground">
+                      Les numéros « Premium » sont plus faciles à retenir mais plus chers : le prix exact s'affiche avant de payer.
+                    </p>
+                  )}
                   <div className="flex max-h-72 flex-col gap-2 overflow-y-auto">
                     {shown.map((n) => (
-                      <div key={n} className="flex items-center justify-between gap-2 rounded-xl border border-border/60 px-3 py-2">
-                        <span className="text-sm font-medium">{formatPhone(n)}</span>
-                        <Button size="sm" disabled={missing.length > 0} onClick={() => onChoose({ zone, specificNumber: n })}>
+                      <div key={n.number} className="flex items-center justify-between gap-2 rounded-xl border border-border/60 px-3 py-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="text-sm font-medium">{formatPhone(n.number)}</span>
+                          {n.premium && (
+                            <Badge variant="warning" className="text-[10px]">
+                              Premium
+                            </Badge>
+                          )}
+                        </div>
+                        <Button size="sm" disabled={missing.length > 0} onClick={() => onChoose({ zone, specificNumber: n.number })}>
                           Acheter
                         </Button>
                       </div>
@@ -532,7 +551,7 @@ export function NumbersPanel({ refreshKey, onOpenSettings, onChanged }: { refres
             ) : (
               <>
                 <p className="text-sm text-muted-foreground">
-                  Première étape, gratuite : active la téléphonie sur ton compte pour pouvoir acheter des numéros 01.
+                  Première étape, gratuite : active la téléphonie sur ton compte pour pouvoir acheter des numéros fixes (01, 04…).
                 </p>
                 <Button
                   className="w-fit"
