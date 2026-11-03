@@ -9,6 +9,7 @@ import {
   activateAccount,
   availableNumbers,
   dismissOrder,
+  markOrderPaid,
   errorForScreen,
   normalizeFrenchPhone,
   numbersOverview,
@@ -209,6 +210,12 @@ telephonyRouter.post('/account/activate', async (req, res) => {
 
 telephonyRouter.post('/orders/:id/dismiss', (req, res) => {
   dismissOrder(req.caller.team_id, req.params.id)
+  res.json({ ok: true })
+})
+
+telephonyRouter.post('/orders/:id/paid', (req, res) => {
+  markOrderPaid(req.caller.team_id, req.params.id)
+  syncSoon(req.caller.team_id)
   res.json({ ok: true })
 })
 

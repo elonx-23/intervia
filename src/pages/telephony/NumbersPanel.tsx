@@ -23,6 +23,7 @@ import {
   formatPrice,
   getNumbersOverview,
   listAvailableNumbers,
+  markOrderPaid,
   orderNumber,
   quoteNumber,
   reconfigureNumber,
@@ -130,7 +131,15 @@ function OwnedNumbers({
 
 // ---------- Commandes en cours ----------
 
-function Orders({ orders, onDismiss }: { orders: NumberOrder[]; onDismiss: (id: string) => void }) {
+function Orders({
+  orders,
+  onDismiss,
+  onPaid,
+}: {
+  orders: NumberOrder[]
+  onDismiss: (id: string) => void
+  onPaid: (id: string) => void
+}) {
   return (
     <Card>
       <CardContent className="flex flex-col gap-3">
@@ -148,7 +157,19 @@ function Orders({ orders, onDismiss }: { orders: NumberOrder[]; onDismiss: (id: 
                   {state.label}
                 </Badge>
               </div>
-              {o.status === 'en_cours' && Date.now() - new Date(o.createdAt).getTime() > 10 * 60 * 1000 && (
+              {o.status === 'en_cours' && o.paidReported && (
+                <p className="text-xs text-muted-foreground">
+                  Paiement reçu de ton côté : l'opérateur valide la commande puis le numéro apparaît ici tout seul. Ça peut
+                  prendre de quelques minutes à quelques heures.
+                </p>
+              )}
+              {o.status === 'a_regler' && o.actionUrl && (
+                <p className="text-xs text-muted-foreground">
+                  Le paiement automatique n'a pas pu se faire : règle la commande avec le bouton ci-dessous, puis appuie sur « J'ai
+                  payé ».
+                </p>
+              )}
+              {o.status === 'en_cours' && !o.paidReported && Date.now() - new Date(o.createdAt).getTime() > 10 * 60 * 1000 && (
                 <p className="text-xs text-muted-foreground">
                   Plus long que prévu.{' '}
                   {o.actionUrl ? "Si rien n'avance, finalise la commande ci-dessous." : 'Contacte le support si ça dure.'}
@@ -164,9 +185,14 @@ function Orders({ orders, onDismiss }: { orders: NumberOrder[]; onDismiss: (id: 
                     </Button>
                   )}
                   {o.status === 'a_regler' && (
-                    <Button variant="outline" size="sm" onClick={() => onDismiss(o.id)}>
-                      Annuler
-                    </Button>
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => onPaid(o.id)}>
+                        J'ai payé
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => onDismiss(o.id)}>
+                        Annuler
+                      </Button>
+                    </>
                   )}
                 </div>
               )}
@@ -537,7 +563,11 @@ export function NumbersPanel({ refreshKey, onOpenSettings, onChanged }: { refres
       )}
 
       {overview.orders.length > 0 && (
-        <Orders orders={overview.orders} onDismiss={(id) => run(id, () => dismissOrder(session!.sessionId, id), "Erreur lors de l'annulation.")} />
+        <Orders
+          orders={overview.orders}
+          onDismiss={(id) => run(id, () => dismissOrder(session!.sessionId, id), "Erreur lors de l'annulation.")}
+          onPaid={(id) => run(id, () => markOrderPaid(session!.sessionId, id), 'Erreur, réessaie.')}
+        />
       )}
 
       {overview.account !== 'ready' && (

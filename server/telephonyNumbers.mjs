@@ -385,6 +385,17 @@ export function dismissOrder(teamId, id) {
   )
 }
 
+// L'admin a réglé la commande lui-même via le lien. Sans le droit de lire les
+// commandes, l'app ne peut pas le constater avant que le numéro apparaisse
+// (de quelques minutes à quelques heures) : on la passe donc « en cours » sur
+// sa parole. Si l'opérateur répond qu'elle n'est pas payée, syncOrders la
+// remet « à régler ».
+export function markOrderPaid(teamId, id) {
+  db.prepare(
+    "UPDATE telephony_orders SET status = 'en_cours', paid_reported_at = ?, updated_at = ? WHERE id = ? AND team_id = ? AND status = 'a_regler'",
+  ).run(now(), now(), id, teamId)
+}
+
 // ---------- Configuration d'un numéro : renvoi vers les téléphones + enregistrement ----------
 
 export function desiredConfig(teamId) {
@@ -669,11 +680,13 @@ export function numbersOverview(teamId) {
       number: o.specific_number,
       total: o.total_ttc,
       // Lien pour finaliser : commande à régler, ou commande « en cours » qui
-      // n'avance pas depuis plus de 5 minutes.
+      // n'avance pas depuis plus de 5 minutes (sauf si l'admin a déjà dit l'avoir payée).
       actionUrl:
-        o.status === 'a_regler' || (o.status === 'en_cours' && Date.now() - new Date(o.created_at).getTime() > 5 * 60 * 1000)
+        o.status === 'a_regler' ||
+        (o.status === 'en_cours' && !o.paid_reported_at && Date.now() - new Date(o.created_at).getTime() > 5 * 60 * 1000)
           ? o.payment_url
           : null,
+      paidReported: Boolean(o.paid_reported_at),
       createdAt: o.created_at,
     }))
 

@@ -78,6 +78,8 @@ export interface NumberOrder {
   number: string | null
   total: number | null
   actionUrl: string | null
+  // L'admin a indiqué avoir payé lui-même via le lien.
+  paidReported?: boolean
   createdAt: string
 }
 
@@ -144,6 +146,10 @@ export async function activateAccount(sessionId: string) {
 
 export async function dismissOrder(sessionId: string, id: string) {
   return apiFetch<{ ok: true }>(`/api/telephony/orders/${id}/dismiss`, { method: 'POST', sessionId })
+}
+
+export async function markOrderPaid(sessionId: string, id: string) {
+  return apiFetch<{ ok: true }>(`/api/telephony/orders/${id}/paid`, { method: 'POST', sessionId })
 }
 
 export async function reconfigureNumber(sessionId: string, serviceName: string) {
