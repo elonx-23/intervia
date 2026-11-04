@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { AddressField } from '@/components/AddressField'
 import { PhotoUploader } from '@/components/PhotoUploader'
+import { CallSummary } from '@/components/CallSummary'
 import { RecordingPlayer } from '@/components/RecordingPlayer'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -307,6 +308,7 @@ export default function InterventionDetail() {
               cas de doute.
             </p>
             <RecordingPlayer callId={intervention.source_call_id} sessionId={session.sessionId} />
+            <CallSummary callId={intervention.source_call_id} sessionId={session.sessionId} />
           </div>
         )}
 

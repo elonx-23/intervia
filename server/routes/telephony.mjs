@@ -269,7 +269,7 @@ telephonyRouter.get('/calls', (req, res) => {
   const rows = db
     .prepare(
       `SELECT c.id, c.direction, c.from_number, c.to_number, c.status, c.duration_seconds,
-         (c.recording_url IS NOT NULL) AS has_recording, c.transcription, c.transcription_status,
+         (c.recording_url IS NOT NULL) AS has_recording, c.summary, c.transcription, c.transcription_status,
          c.started_at, c.ended_at, c.intervention_id,
          i.reference AS intervention_reference,
          COALESCE(
@@ -291,6 +291,15 @@ telephonyRouter.get('/calls', (req, res) => {
     )
     .all(req.caller.team_id)
   res.json(rows.map((r) => ({ ...r, has_recording: Boolean(r.has_recording) })))
+})
+
+// Résumé et transcription d'un appel (affichés repliés sur la fiche créée depuis l'appel).
+telephonyRouter.get('/calls/:id/summary', (req, res) => {
+  const call = db
+    .prepare('SELECT summary, transcription, transcription_status FROM calls WHERE id = ? AND team_id = ?')
+    .get(req.params.id, req.caller.team_id)
+  if (!call) return res.status(404).json({ error: 'Appel introuvable' })
+  res.json(call)
 })
 
 // Relance la transcription d'un appel resté en erreur (ex. crédit épuisé à

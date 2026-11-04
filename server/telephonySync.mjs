@@ -5,6 +5,7 @@ import { toE164 } from './phone.mjs'
 import { errorForScreen, syncNumbers, syncOrders } from './telephonyNumbers.mjs'
 import { telnyxEnabledFor } from './telnyx.mjs'
 import { syncTelnyx } from './telnyxNumbers.mjs'
+import { createInterventionFromCall } from './callExtraction.mjs'
 import { transcribeCallRecording } from './transcription.mjs'
 
 // L'opérateur ne prévient pas l'app quand un appel se termine (pas de
@@ -157,6 +158,19 @@ function startPendingTranscriptions(teamId) {
     .all(teamId, MAX_TRANSCRIPTIONS_PER_RUN)
   for (const call of pending) {
     transcribeCallRecording({ callId: call.id, recordingUrl: call.recording_url, openaiApiKey }).catch(() => {})
+  }
+
+  // Appels déjà transcrits mais jamais résumés (transcrits avant l'ajout du
+  // résumé, ou analyse échouée) : résumé + fiche si un envoi a été convenu.
+  const unsummarized = db
+    .prepare(
+      `SELECT id, transcription FROM calls
+       WHERE team_id = ? AND direction = 'inbound' AND transcription IS NOT NULL AND analyzed_at IS NULL
+       ORDER BY started_at DESC LIMIT ?`,
+    )
+    .all(teamId, MAX_TRANSCRIPTIONS_PER_RUN)
+  for (const call of unsummarized) {
+    createInterventionFromCall({ callId: call.id, transcription: call.transcription, openaiApiKey }).catch(() => {})
   }
 }
 

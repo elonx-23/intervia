@@ -17,7 +17,8 @@ const EXTRACTION_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: [
-    'is_intervention_request',
+    'summary',
+    'dispatch_confirmed',
     'first_name',
     'last_name',
     'address',
@@ -29,7 +30,8 @@ const EXTRACTION_SCHEMA = {
     'description',
   ],
   properties: {
-    is_intervention_request: { type: 'boolean' },
+    summary: { type: 'string' },
+    dispatch_confirmed: { type: 'boolean' },
     first_name: nullableString,
     last_name: nullableString,
     address: nullableString,
@@ -44,9 +46,11 @@ const EXTRACTION_SCHEMA = {
 
 const SYSTEM_PROMPT = `Tu analyses la transcription d'un appel téléphonique reçu par une entreprise de dépannage à domicile (serrurerie, électricité, plomberie) en France.
 
-Détermine d'abord si l'appelant demande une NOUVELLE intervention. Réponds false pour : faux numéro, démarchage commercial, fournisseur, client qui rappelle au sujet d'une intervention déjà prévue, appel vide ou inaudible.
+1) summary : un résumé propre de l'appel, PAS la transcription mot à mot. 2 à 4 lignes courtes commençant par « - », en français correct, à la troisième personne : qui appelle, le problème, ce qui a été convenu (prix annoncé, délai, heure de passage), la suite à donner. N'invente rien. Si l'appel ne contient que l'annonce d'accueil, du silence ou un raccroché, écris une seule ligne qui le dit (ex. « - Appel sans échange : l'appelant a raccroché pendant l'annonce d'accueil. »).
 
-Puis extrais les informations du client. Règles strictes :
+2) dispatch_confirmed : true UNIQUEMENT si, pendant l'appel, il est clairement convenu qu'un technicien est envoyé chez le client (le client accepte le passage, le prix ou le rendez-vous). false dans tous les autres cas : simple demande de prix ou de renseignement, client qui réfléchit ou rappellera, refus, faux numéro, démarchage, fournisseur, suivi d'une intervention déjà prévue, appel vide ou inaudible.
+
+3) Puis extrais les informations du client. Règles strictes :
 - N'invente rien. Une information qui n'est pas dite clairement dans l'appel vaut null.
 - address : numéro et nom de la voie uniquement (sans code postal ni ville).
 - floor : l'étage tel que dit (ex. "3e étage", "rez-de-chaussée"), sinon null.
@@ -54,13 +58,26 @@ Puis extrais les informations du client. Règles strictes :
 - trade : le corps de métier du problème. Porte claquée, serrure, clé, blindage, rideau métallique = Serrurerie. Fuite, canalisation, WC, chauffe-eau, débouchage = Plomberie. Panne de courant, disjoncteur, prise, tableau électrique = Électricité. Sinon Autre.
 - description : le problème en une ou deux phrases claires, à la troisième personne.`
 
-// Appelé une fois la transcription d'un appel ENTRANT disponible. Si l'IA
-// juge qu'il s'agit d'une demande d'intervention, crée la fiche, la relie à
-// l'appel et prévient l'admin. Ne lève jamais : un échec d'extraction ne
+// Une ligne par point (« - … »), même si le modèle les a renvoyées collées.
+export function formatSummary(text) {
+  return String(text ?? '')
+    .trim()
+    .replace(/^-\s*/, '')
+    .split(/\s*\n\s*-\s*|\s+-\s+(?=[A-ZÀ-Ý])/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => `- ${l}`)
+    .join('\n')
+}
+
+// Appelé une fois la transcription d'un appel ENTRANT disponible : enregistre
+// un résumé propre de l'appel, et ne crée la fiche d'intervention (reliée à
+// l'appel, admin prévenu) QUE si l'envoi d'un technicien a été convenu. Ne lève jamais : un échec d'extraction ne
 // doit pas casser l'enregistrement de l'appel lui-même.
 export async function createInterventionFromCall({ callId, transcription, openaiApiKey }) {
   const call = db.prepare('SELECT * FROM calls WHERE id = ?').get(callId)
-  if (!call || call.direction !== 'inbound' || call.intervention_id || !transcription?.trim()) return null
+  if (!call || call.direction !== 'inbound' || !transcription?.trim()) return null
+  db.prepare('UPDATE calls SET analyzed_at = ? WHERE id = ?').run(now(), callId)
 
   let extracted
   try {
@@ -79,11 +96,17 @@ export async function createInterventionFromCall({ callId, transcription, openai
     })
     extracted = JSON.parse(completion.choices[0].message.content)
   } catch (e) {
-    console.log(`[telephonie] extraction de fiche échouée pour l'appel ${callId} : ${e.message}`)
+    console.log(`[telephonie] analyse de l'appel ${callId} échouée : ${e.message}`)
+    // Réessayée au passage suivant (ex. crédit de transcription épuisé).
+    db.prepare('UPDATE calls SET analyzed_at = NULL WHERE id = ?').run(callId)
     return null
   }
 
-  if (!extracted?.is_intervention_request) return null
+  if (extracted?.summary) {
+    db.prepare('UPDATE calls SET summary = ? WHERE id = ?').run(formatSummary(extracted.summary), callId)
+    broadcast('call_update', { id: callId }, call.team_id)
+  }
+  if (!extracted?.dispatch_confirmed || call.intervention_id) return null
   return insertInterventionFromExtraction(call, extracted)
 }
 

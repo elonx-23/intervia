@@ -169,6 +169,13 @@ export async function releaseNumber(sessionId: string, serviceName: string) {
 
 // ---------- Appels ----------
 
+export async function getCallSummary(sessionId: string, callId: string) {
+  return apiFetch<{ summary: string | null; transcription: string | null; transcription_status: string | null }>(
+    `/api/telephony/calls/${callId}/summary`,
+    { sessionId },
+  )
+}
+
 export interface CallRecord {
   id: string
   direction: 'inbound' | 'outbound'
@@ -177,6 +184,8 @@ export interface CallRecord {
   status: string
   duration_seconds: number | null
   has_recording: boolean
+  // Résumé propre de l'appel (pas le mot à mot), rédigé après la transcription.
+  summary: string | null
   transcription: string | null
   transcription_status: string | null
   started_at: string

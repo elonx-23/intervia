@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, ClipboardList, FileText, Phone } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronUp, ClipboardList, FileText, Phone, Sparkles } from 'lucide-react'
 import * as React from 'react'
 import { Link } from 'react-router-dom'
 
@@ -31,6 +31,7 @@ function CallCard({ call, hasOpenaiKey, onChanged }: { call: CallRecord; hasOpen
   const { session } = useAuth()
   const number = call.direction === 'inbound' ? call.from_number : call.to_number
   const [retrying, setRetrying] = React.useState(false)
+  const [showTranscript, setShowTranscript] = React.useState(false)
 
   const retry = async () => {
     if (!session) return
@@ -78,10 +79,34 @@ function CallCard({ call, hasOpenaiKey, onChanged }: { call: CallRecord; hasOpen
 
         {call.has_recording && session && <RecordingPlayer callId={call.id} sessionId={session.sessionId} />}
 
-        {call.transcription && (
+        {call.summary && (
           <div className="flex items-start gap-2 rounded-xl bg-secondary/40 p-3 text-sm">
-            <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            <p className="min-w-0 whitespace-pre-line">{call.transcription}</p>
+            <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
+            <div className="min-w-0">
+              <p className="mb-1 text-xs font-semibold text-muted-foreground">Résumé de l'appel</p>
+              <p className="whitespace-pre-line">{call.summary}</p>
+            </div>
+          </div>
+        )}
+        {call.transcription && !call.summary && (
+          <p className="text-xs text-muted-foreground">Résumé en cours…</p>
+        )}
+        {call.transcription && (
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setShowTranscript((v) => !v)}
+              className="flex w-fit items-center gap-1 text-xs font-medium text-muted-foreground"
+            >
+              {showTranscript ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+              {showTranscript ? 'Masquer la transcription' : 'Voir la transcription complète'}
+            </button>
+            {showTranscript && (
+              <div className="flex items-start gap-2 rounded-xl border border-border/60 p-3 text-xs text-muted-foreground">
+                <FileText className="mt-0.5 size-3.5 shrink-0" />
+                <p className="min-w-0 whitespace-pre-line">{call.transcription}</p>
+              </div>
+            )}
           </div>
         )}
         {call.transcription_status === 'en_attente' && (
