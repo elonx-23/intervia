@@ -37,6 +37,10 @@ const LABELS: Record<string, { label: string; description: string }> = {
     label: 'Fiche créée depuis un appel',
     description: "Quand un appel client devient automatiquement une fiche d'intervention",
   },
+  nouvelle_connexion: {
+    label: 'Nouvelle connexion à ton compte',
+    description: "Quand ton compte est ouvert sur un appareil (avec l'appareil et la ville)",
+  },
 }
 
 export default function NotificationSettings() {

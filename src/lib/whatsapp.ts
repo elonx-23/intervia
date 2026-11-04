@@ -26,6 +26,7 @@ export interface WhatsAppSession {
   status: 'deconnecte' | 'connexion' | 'qr' | 'connecte'
   qr: string | null
   me: { number: string; name: string | null } | null
+  error?: string | null
 }
 
 export interface WhatsAppGroup {

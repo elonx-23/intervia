@@ -4,6 +4,7 @@ import { db, logLoginAttempt, now, uuid } from '../db.mjs'
 import { getCaller, requireAdmin, requireAuth, sessionPayloadForUser } from '../auth.mjs'
 import { verifyPassword } from '../password.mjs'
 import { rateLimit } from '../rateLimit.mjs'
+import { clientIp, listDevices, recordNewSession, revokeDevices } from '../deviceSessions.mjs'
 
 export const authRouter = Router()
 
@@ -20,7 +21,7 @@ authRouter.post('/login-email', loginLimiter, (req, res) => {
 
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(cleanEmail)
   if (!user || !verifyPassword(password, user.password_hash)) {
-    logLoginAttempt(cleanEmail, 'email', false, req.ip)
+    logLoginAttempt(cleanEmail, 'email', false, clientIp(req))
     return res.status(401).json({ error: 'Identifiants invalides.' })
   }
   if (!user.active) return res.status(403).json({ error: 'Compte désactivé.' })
@@ -28,7 +29,7 @@ authRouter.post('/login-email', loginLimiter, (req, res) => {
     return res.status(403).json({ error: 'Vérifie ton adresse email avant de te connecter (lien envoyé à l’inscription).' })
   }
 
-  logLoginAttempt(cleanEmail, 'email', true, req.ip)
+  logLoginAttempt(cleanEmail, 'email', true, clientIp(req))
 
   const sessionId = uuid()
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString()
@@ -38,8 +39,21 @@ authRouter.post('/login-email', loginLimiter, (req, res) => {
     expiresAt,
     now(),
   )
+  recordNewSession(sessionId, user, req)
 
   res.json(sessionPayloadForUser(user, sessionId))
+})
+
+// Appareils connectés au compte de l'appelant (Réglages → Sécurité).
+authRouter.get('/security/devices', requireAuth, (req, res) => {
+  res.json(listDevices(req.caller.user_id, req.sessionId))
+})
+
+// Déconnecte un appareil (:handle) ou tous les autres (:handle = « autres »).
+authRouter.delete('/security/devices/:handle', requireAuth, (req, res) => {
+  const handle = String(req.params.handle)
+  if (handle !== 'autres' && !/^[0-9a-f]{24}$/.test(handle)) return res.status(400).json({ error: 'Appareil inconnu.' })
+  res.json({ disconnected: revokeDevices(req.caller.user_id, req.sessionId, handle) })
 })
 
 // Visibilité sur les tentatives de connexion — sans ça, une vague de mots de

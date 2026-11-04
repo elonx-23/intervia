@@ -8,6 +8,7 @@ import { LogoutDialog } from '@/components/layout/LogoutDialog'
 import { TeamSwitcher } from '@/components/settings/TeamSwitcher'
 import { useAuth } from '@/lib/auth'
 import { subscribeToPush } from '@/lib/notifications'
+import { WhatsAppIcon } from '@/components/WhatsAppIcon'
 import { friendlyError } from '@/lib/errors'
 
 export default function Settings() {
@@ -69,7 +70,7 @@ export default function Settings() {
             <SettingsRow to="/reglages/entreprise" icon={Building2} label="Entreprise" />
             <SettingsRow to="/reglages/emails" icon={Mail} label="Emails" />
             <SettingsRow to="/telephonie" icon={Phone} label="Téléphonie" />
-            <SettingsRow to="/reglages/whatsapp" icon={MessageCircle} label="WhatsApp" />
+            <SettingsRow to="/reglages/whatsapp" icon={WhatsAppIcon} label="WhatsApp" />
             <SettingsRow to="/reglages/region" icon={Globe} label="Région" />
             <SettingsRow to="/reglages/sauvegardes" icon={Database} label="Sauvegardes" />
             <SettingsRow to="/reglages/securite" icon={ShieldCheck} label="Sécurité" />

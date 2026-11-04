@@ -31,6 +31,7 @@ const silentLogger = {
 }
 
 const sessions = new Map() // teamId -> { sock, status, qr, me, groups }
+const failures = new Map() // teamId -> coupures d'affilée avant connexion réussie
 
 const authDir = (teamId) => path.join(authRoot, String(teamId).replace(/[^\w-]/g, ''))
 
@@ -84,7 +85,7 @@ function setState(teamId, patch) {
 
 export function sessionStatus(teamId) {
   const s = sessions.get(teamId)
-  return { status: s?.status ?? 'deconnecte', qr: s?.status === 'qr' ? s.qr : null, me: s?.me ?? null }
+  return { status: s?.status ?? 'deconnecte', qr: s?.status === 'qr' ? s.qr : null, me: s?.me ?? null, error: s?.status === 'deconnecte' ? (s?.error ?? null) : null }
 }
 
 export async function connect(teamId) {
@@ -98,14 +99,14 @@ export async function connect(teamId) {
     version,
     auth: state,
     logger: silentLogger,
-    // Présenté comme l'application de bureau : WhatsApp envoie alors la liste
-    // complète des discussions (et les noms de contacts) à la liaison, pas
-    // seulement les plus récentes. Seuls noms et identifiants sont gardés.
-    browser: Browsers.macOS('Desktop'),
+    // Nom d'appareil affiché dans « Appareils connectés ». (Se présenter comme
+    // l'application de bureau, Browsers.macOS('Desktop'), est refusé par
+    // WhatsApp : connexion coupée en boucle, code 428.)
+    browser: Browsers.macOS('Intervia'),
     markOnlineOnConnect: false,
     syncFullHistory: true,
   })
-  setState(teamId, { sock, status: 'connexion', qr: null })
+  setState(teamId, { sock, status: 'connexion', qr: null, error: null })
 
   sock.ev.on('creds.update', saveCreds)
   sock.ev.on('messaging-history.set', ({ chats = [], contacts = [] }) => rememberChats(teamId, [...contacts, ...chats]))
@@ -122,6 +123,7 @@ export async function connect(teamId) {
     if (sessions.get(teamId)?.sock !== sock) return
     if (u.qr) setState(teamId, { status: 'qr', qr: await QRCode.toDataURL(u.qr, { margin: 1, width: 320 }) })
     if (u.connection === 'open') {
+      failures.set(teamId, 0)
       const id = sock.user?.id ?? ''
       setState(teamId, { status: 'connecte', qr: null, me: { number: id.split(':')[0].split('@')[0], name: sock.user?.name ?? null } })
     }
@@ -132,9 +134,19 @@ export async function connect(teamId) {
         fs.rmSync(authDir(teamId), { recursive: true, force: true })
         setState(teamId, { sock: null, status: 'deconnecte', qr: null, me: null })
       } else {
-        // Coupure réseau, redémarrage demandé par WhatsApp… : on se reconnecte.
+        // Coupure réseau, redémarrage demandé par WhatsApp… : on se reconnecte,
+        // de plus en plus espacé — et on abandonne après 5 échecs d'affilée
+        // (plus jamais de « Connexion… » sans fin).
+        const n = (failures.get(teamId) ?? 0) + 1
+        failures.set(teamId, n)
+        console.log(`[whatsapp] connexion coupée (code ${code ?? 'inconnu'}), tentative ${n}/5`)
+        if (n >= 5) {
+          failures.set(teamId, 0)
+          setState(teamId, { sock: null, status: 'deconnecte', qr: null, error: 'La connexion à WhatsApp a échoué. Réessaie dans un instant.' })
+          return
+        }
         setState(teamId, { sock: null, status: 'connexion' })
-        setTimeout(() => connect(teamId).catch(() => setState(teamId, { status: 'deconnecte' })), 3000)
+        setTimeout(() => connect(teamId).catch(() => setState(teamId, { status: 'deconnecte' })), Math.min(30000, 2000 * 2 ** n))
       }
     }
   })

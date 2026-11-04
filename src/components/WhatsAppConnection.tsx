@@ -108,6 +108,7 @@ export function WhatsAppConnection() {
           <p className="flex items-center gap-2 text-sm">
             <Smartphone className="size-5 text-muted-foreground" /> Aucun WhatsApp relié.
           </p>
+          {wa.error && <p className="text-sm text-destructive">{wa.error}</p>}
           <Button className="w-fit" disabled={busy} onClick={() => run(connectSession)}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <MessageCircle className="size-4" />}
             Relier mon WhatsApp

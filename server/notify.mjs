@@ -5,7 +5,7 @@ import { pushNotification } from './push.mjs'
 // la fois à valider ce qu'un PATCH peut modifier et à construire les deux
 // listes affichées côté client (technicien vs admin, l'admin en a plus).
 export const TECHNICIEN_NOTIFICATION_TYPES = ['intervention_assignee', 'urgent']
-export const ADMIN_NOTIFICATION_TYPES = ['devis_signe', 'facture_signee', 'facture_creee', 'fiche_depuis_appel']
+export const ADMIN_NOTIFICATION_TYPES = ['devis_signe', 'facture_signee', 'facture_creee', 'fiche_depuis_appel', 'nouvelle_connexion']
 export const ALL_NOTIFICATION_TYPES = [...TECHNICIEN_NOTIFICATION_TYPES, ...ADMIN_NOTIFICATION_TYPES]
 
 // Envoi de la vraie notification push tout de suite après l'insertion en

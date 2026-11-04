@@ -1,3 +1,4 @@
+import { touchSession } from './deviceSessions.mjs'
 import { db } from './db.mjs'
 
 // L'ancien système (access_codes, nom d'utilisateur + code) a été retiré —
@@ -44,6 +45,7 @@ export function requireAuth(req, res, next) {
 
   req.caller = caller
   req.sessionId = sessionId
+  touchSession(sessionId, req)
   next()
 }
 
