@@ -98,9 +98,12 @@ export async function connect(teamId) {
     version,
     auth: state,
     logger: silentLogger,
-    browser: Browsers.macOS('Intervia'),
+    // Présenté comme l'application de bureau : WhatsApp envoie alors la liste
+    // complète des discussions (et les noms de contacts) à la liaison, pas
+    // seulement les plus récentes. Seuls noms et identifiants sont gardés.
+    browser: Browsers.macOS('Desktop'),
     markOnlineOnConnect: false,
-    syncFullHistory: false,
+    syncFullHistory: true,
   })
   setState(teamId, { sock, status: 'connexion', qr: null })
 

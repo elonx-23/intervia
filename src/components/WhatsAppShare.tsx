@@ -1,5 +1,6 @@
 import { Check, FileText, Loader2, Megaphone, MessageCircle, Plus, Search, Send, Trash2, UserCheck, Users, X } from 'lucide-react'
 import * as React from 'react'
+import { Link } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,7 +16,6 @@ import { friendlyError } from '@/lib/errors'
 import type { Intervention } from '@/lib/interventions'
 import {
   CATEGORY_LABEL,
-  addContact,
   deleteContact,
   addContactsBulk,
   ficheText,
@@ -56,8 +56,7 @@ function SendDialog({
   const [contacts, setContacts] = React.useState<WhatsAppContact[]>([])
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [message, setMessage] = React.useState('')
-  const [newName, setNewName] = React.useState('')
-  const [newPhone, setNewPhone] = React.useState('')
+  const [chatKind, setChatKind] = React.useState<'tous' | 'contacts' | 'groupes'>('tous')
   const [error, setError] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [queue, setQueue] = React.useState<WhatsAppContact[] | null>(null)
@@ -107,24 +106,6 @@ function SendDialog({
       return next
     })
 
-  const add = async () => {
-    if (!session) return
-    setError(null)
-    try {
-      const c = await addContact(session.sessionId, {
-        name: newName,
-        phone: newPhone,
-        category,
-      })
-      setContacts((list) => [...list, c].sort((a, b) => a.name.localeCompare(b.name)))
-      setSelected((s) => new Set(s).add(c.id))
-      setNewName('')
-      setNewPhone('')
-    } catch (e) {
-      setError(friendlyError(e, "Impossible d'ajouter le contact."))
-    }
-  }
-
   const remove = async (id: string) => {
     if (!session) return
     await deleteContact(session.sessionId, id).catch(() => {})
@@ -173,6 +154,13 @@ function SendDialog({
     }
   }
 
+  // Tableau vide et WhatsApp relié : la liste des discussions s'ouvre d'elle-même.
+  const tabCount = contacts.filter((c) => c.category === category).length
+  React.useEffect(() => {
+    if (open && direct && !chats && tabCount === 0) showChats()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, direct, category, tabCount])
+
   const switchMode = (m: 'proposition' | 'fiche') => {
     setMode(m)
     setMessage(m === 'fiche' ? ficheText(intervention) : shortCode(intervention))
@@ -206,7 +194,7 @@ function SendDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <CenteredDialogContent className="flex max-h-[90dvh] flex-col overflow-y-auto">
+      <CenteredDialogContent className="flex max-h-[94dvh] w-[calc(100%-1rem)] flex-col overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Envoyer la fiche</DialogTitle>
           <DialogDescription>
@@ -355,80 +343,124 @@ function SendDialog({
               {inTab.length === 0 && <p className="text-xs text-muted-foreground">Aucun contact dans cette liste pour l'instant.</p>}
             </div>
 
-            <div className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-2.5">
-              <p className="text-xs font-medium text-muted-foreground">Ajouter un contact ({CATEGORY_LABEL[category]})</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Input placeholder="Nom" value={newName} onChange={(e) => setNewName(e.target.value)} />
-                <Input
-                  placeholder="06 12 34 56 78"
-                  type="tel"
-                  inputMode="tel"
-                  value={newPhone}
-                  onChange={(e) => setNewPhone(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" className="w-fit" onClick={add} disabled={!newName.trim() || !newPhone.trim()}>
-                  <Plus className="size-4" /> Ajouter
-                </Button>
-                {direct && (
-                  <Button variant="outline" size="sm" className="w-fit" onClick={showChats}>
-                    <Users className="size-4" /> Choisir dans WhatsApp
-                  </Button>
-                )}
-              </div>
-              {chats && (
-                <div className="flex flex-col gap-2">
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input className="pl-9" placeholder="Chercher une discussion" value={chatQuery} onChange={(e) => setChatQuery(e.target.value)} />
-                  </div>
-                  <div className="flex max-h-56 flex-col gap-1 overflow-y-auto">
-                    {(() => {
-                      const already = new Set(contacts.filter((c) => c.category === category).map((c) => c.phone))
-                      const q = chatQuery.trim().toLowerCase()
-                      const list = chats.filter((c) => !already.has(c.id) && (!q || `${c.name} ${c.detail ?? ''}`.toLowerCase().includes(q)))
-                      if (list.length === 0) {
-                        return (
-                          <p className="text-xs text-muted-foreground">
-                            Aucune discussion trouvée. Les contacts apparaissent au fil des messages reçus ; les groupes, eux, sont tous là.
-                          </p>
-                        )
-                      }
-                      return list.slice(0, 150).map((c) => (
-                        <label key={c.id} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-secondary">
-                          <input
-                            type="checkbox"
-                            className="size-4"
-                            style={{ accentColor: 'var(--primary)' }}
-                            checked={picked.has(c.id)}
-                            onChange={() =>
-                              setPicked((p) => {
-                                const next = new Set(p)
-                                if (next.has(c.id)) next.delete(c.id)
-                                else next.add(c.id)
-                                return next
-                              })
-                            }
-                          />
-                          {c.kind === 'groupe' && <Users className="size-3.5 shrink-0 text-muted-foreground" />}
-                          <span className="min-w-0 flex-1 truncate">{c.name}</span>
-                          {c.detail && <span className="shrink-0 text-xs text-muted-foreground">{c.detail}</span>}
-                        </label>
-                      ))
-                    })()}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={addPicked} disabled={picked.size === 0}>
-                      <Plus className="size-4" /> Ajouter{picked.size > 0 ? ` (${picked.size})` : ''} au tableau {CATEGORY_LABEL[category]}
+            {/* Ajout au tableau : uniquement depuis les discussions du WhatsApp relié. */}
+            {direct ? (
+              <div className="flex flex-col gap-2 rounded-xl border border-border/70 p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">Ajouter depuis WhatsApp ({CATEGORY_LABEL[category]})</p>
+                  {!chats && (
+                    <Button variant="outline" size="sm" onClick={showChats}>
+                      <Users className="size-4" /> Voir mes discussions
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setChats(null)}>
-                      Fermer
-                    </Button>
-                  </div>
+                  )}
                 </div>
-              )}
-            </div>
+                {chats &&
+                  (() => {
+                    const already = new Set(contacts.filter((c) => c.category === category).map((c) => c.phone))
+                    const q = chatQuery.trim().toLowerCase()
+                    const list = chats.filter(
+                      (c) =>
+                        !already.has(c.id) &&
+                        (chatKind === 'tous' || c.kind === (chatKind === 'groupes' ? 'groupe' : 'contact')) &&
+                        (!q || `${c.name} ${c.detail ?? ''}`.toLowerCase().includes(q)),
+                    )
+                    const allPicked = list.length > 0 && list.every((c) => picked.has(c.id))
+                    return (
+                      <>
+                        <div className="relative">
+                          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            className="pl-9"
+                            placeholder="Chercher un contact ou un groupe"
+                            value={chatQuery}
+                            onChange={(e) => setChatQuery(e.target.value)}
+                          />
+                        </div>
+                        <SegmentedControl
+                          options={[
+                            { value: 'tous', label: `Tous (${chats.length})` },
+                            { value: 'contacts', label: `Contacts (${chats.filter((c) => c.kind === 'contact').length})` },
+                            { value: 'groupes', label: `Groupes (${chats.filter((c) => c.kind === 'groupe').length})` },
+                          ]}
+                          value={chatKind}
+                          onChange={setChatKind}
+                        />
+                        {list.length > 0 && (
+                          <label className="flex items-center gap-2.5 rounded-lg bg-secondary/50 px-2.5 py-2 text-sm font-medium">
+                            <input
+                              type="checkbox"
+                              className="size-4"
+                              style={{ accentColor: 'var(--primary)' }}
+                              checked={allPicked}
+                              onChange={() =>
+                                setPicked((p) => {
+                                  const next = new Set(p)
+                                  for (const c of list) {
+                                    if (allPicked) next.delete(c.id)
+                                    else next.add(c.id)
+                                  }
+                                  return next
+                                })
+                              }
+                            />
+                            Tout sélectionner ({list.length})
+                          </label>
+                        )}
+                        <div className="flex max-h-[45dvh] min-h-40 flex-col gap-0.5 overflow-y-auto rounded-lg border border-border/50 p-1">
+                          {list.length === 0 && (
+                            <p className="p-2 text-xs text-muted-foreground">
+                              {chats.length === 0
+                                ? 'Aucune discussion pour l’instant : elles arrivent quelques minutes après la liaison.'
+                                : 'Aucune discussion ne correspond.'}
+                            </p>
+                          )}
+                          {list.slice(0, 400).map((c) => (
+                            <label key={c.id} className="flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm hover:bg-secondary">
+                              <input
+                                type="checkbox"
+                                className="size-4 shrink-0"
+                                style={{ accentColor: 'var(--primary)' }}
+                                checked={picked.has(c.id)}
+                                onChange={() =>
+                                  setPicked((p) => {
+                                    const next = new Set(p)
+                                    if (next.has(c.id)) next.delete(c.id)
+                                    else next.add(c.id)
+                                    return next
+                                  })
+                                }
+                              />
+                              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
+                                {c.kind === 'groupe' ? <Users className="size-4 text-muted-foreground" /> : c.name.slice(0, 1).toUpperCase()}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate font-medium">{c.name}</span>
+                                {c.detail && <span className="block truncate text-xs text-muted-foreground">{c.detail}</span>}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={addPicked} disabled={picked.size === 0}>
+                            <Plus className="size-4" /> Ajouter{picked.size > 0 ? ` (${picked.size})` : ''} au tableau {CATEGORY_LABEL[category]}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setChats(null)}>
+                            Fermer
+                          </Button>
+                        </div>
+                      </>
+                    )
+                  })()}
+              </div>
+            ) : (
+              <p className="rounded-xl bg-secondary/50 p-3 text-sm">
+                Pour ajouter des contacts et des groupes,{' '}
+                <Link to="/reglages/whatsapp" className="font-medium text-primary underline-offset-2 hover:underline">
+                  relie ton WhatsApp dans Réglages
+                </Link>
+                .
+              </p>
+            )}
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
