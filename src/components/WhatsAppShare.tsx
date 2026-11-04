@@ -1,4 +1,4 @@
-import { Check, Loader2, MessageCircle, Plus, Send, Trash2, UserCheck, Users, X } from 'lucide-react'
+import { Check, FileText, Loader2, Megaphone, MessageCircle, Plus, Search, Send, Trash2, UserCheck, Users, X } from 'lucide-react'
 import * as React from 'react'
 
 import { Badge } from '@/components/ui/badge'
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { CenteredDialogContent, Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useWhatsAppSession } from '@/components/WhatsAppConnection'
 import { useLiveEvents } from '@/hooks/useLiveEvents'
@@ -16,10 +17,12 @@ import {
   CATEGORY_LABEL,
   addContact,
   deleteContact,
+  addContactsBulk,
+  ficheText,
   getShares,
   isGroup,
+  listChats,
   listContacts,
-  listGroups,
   sendDirect,
   recordShares,
   setTakenBy,
@@ -29,7 +32,7 @@ import {
   type ShareCategory,
   type TakenBy,
   type WhatsAppContact,
-  type WhatsAppGroup,
+  type WhatsAppChat,
 } from '@/lib/whatsapp'
 
 // ---------- Fenêtre d'envoi ----------
@@ -61,7 +64,11 @@ function SendDialog({
   const [opened, setOpened] = React.useState<Set<string>>(new Set())
   const { wa } = useWhatsAppSession()
   const direct = wa?.status === 'connecte'
-  const [groups, setGroups] = React.useState<WhatsAppGroup[] | null>(null)
+  const [chats, setChats] = React.useState<WhatsAppChat[] | null>(null)
+  const [chatQuery, setChatQuery] = React.useState('')
+  const [picked, setPicked] = React.useState<Set<string>>(new Set())
+  // « proposition » : code court aux listes (ex. OP PARIS 6) ; « fiche » : la fiche complète.
+  const [mode, setMode] = React.useState<'proposition' | 'fiche'>('proposition')
   // Envoi direct en cours : lignes suivies en direct (envoi → envoyé / échec).
   const [sending, setSending] = React.useState<InterventionShare[] | null>(null)
 
@@ -69,7 +76,9 @@ function SendDialog({
     if (!open || !session) return
     setQueue(null)
     setSending(null)
-    setGroups(null)
+    setChats(null)
+    setPicked(new Set())
+    setMode('proposition')
     setOpened(new Set())
     setSelected(new Set())
     setError(null)
@@ -138,26 +147,35 @@ function SendDialog({
   }, [session, sending, intervention.id])
   useLiveEvents(['interventions_changed'], refreshSending)
 
-  const showGroups = async () => {
+  const showChats = async () => {
     if (!session) return
     setError(null)
+    setPicked(new Set())
+    setChatQuery('')
     try {
-      setGroups(await listGroups(session.sessionId))
+      setChats(await listChats(session.sessionId))
     } catch (e) {
-      setError(friendlyError(e, 'Impossible de lire tes groupes.'))
+      setError(friendlyError(e, 'Impossible de lire tes discussions.'))
     }
   }
 
-  const addGroup = async (g: WhatsAppGroup) => {
-    if (!session) return
+  // Ajoute les discussions cochées au tableau de l'onglet en cours.
+  const addPicked = async () => {
+    if (!session || !chats) return
     try {
-      const c = await addContact(session.sessionId, { name: g.name, phone: g.id, category })
-      setContacts((list) => [...list, c].sort((a, b) => a.name.localeCompare(b.name)))
-      setSelected((sel) => new Set(sel).add(c.id))
-      setGroups(null)
+      const items = chats.filter((c) => picked.has(c.id)).map((c) => ({ id: c.id, name: c.name }))
+      const added = await addContactsBulk(session.sessionId, category, items)
+      setContacts((list) => [...list, ...added].sort((a, b) => a.name.localeCompare(b.name)))
+      setSelected((sel) => new Set([...sel, ...added.map((c) => c.id)]))
+      setChats(null)
     } catch (e) {
-      setError(friendlyError(e, "Impossible d'ajouter le groupe."))
+      setError(friendlyError(e, "Impossible d'ajouter ces discussions."))
     }
+  }
+
+  const switchMode = (m: 'proposition' | 'fiche') => {
+    setMode(m)
+    setMessage(m === 'fiche' ? ficheText(intervention) : shortCode(intervention))
   }
 
   const send = async () => {
@@ -268,9 +286,23 @@ function SendDialog({
               onChange={setCategory}
             />
 
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant={mode === 'proposition' ? 'default' : 'outline'} size="sm" onClick={() => switchMode('proposition')}>
+                <Megaphone className="size-4" /> Proposition
+              </Button>
+              <Button variant={mode === 'fiche' ? 'default' : 'outline'} size="sm" onClick={() => switchMode('fiche')}>
+                <FileText className="size-4" /> Fiche complète
+              </Button>
+            </div>
             <div className="flex flex-col gap-1">
-              <p className="text-xs text-muted-foreground">Message</p>
-              <Input value={message} onChange={(e) => setMessage(e.target.value)} className="font-semibold" />
+              <p className="text-xs text-muted-foreground">
+                {mode === 'proposition' ? 'Proposition : qui est dispo pour cette intervention ?' : 'Fiche complète, pour celui qui prend l’intervention'}
+              </p>
+              {mode === 'proposition' ? (
+                <Input value={message} onChange={(e) => setMessage(e.target.value)} className="font-semibold" />
+              ) : (
+                <Textarea value={message} onChange={(e) => setMessage(e.target.value)} className="min-h-32 text-sm" />
+              )}
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -340,27 +372,60 @@ function SendDialog({
                   <Plus className="size-4" /> Ajouter
                 </Button>
                 {direct && (
-                  <Button variant="outline" size="sm" className="w-fit" onClick={showGroups}>
-                    <Users className="size-4" /> Ajouter un groupe WhatsApp
+                  <Button variant="outline" size="sm" className="w-fit" onClick={showChats}>
+                    <Users className="size-4" /> Choisir dans WhatsApp
                   </Button>
                 )}
               </div>
-              {groups && (
-                <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
-                  {groups.length === 0 && <p className="text-xs text-muted-foreground">Aucun groupe trouvé.</p>}
-                  {groups
-                    .filter((g) => !contacts.some((c) => c.phone === g.id && c.category === category))
-                    .map((g) => (
-                      <button
-                        key={g.id}
-                        type="button"
-                        onClick={() => addGroup(g)}
-                        className="flex items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm hover:bg-secondary"
-                      >
-                        <span className="truncate">{g.name}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground">{g.size} membres</span>
-                      </button>
-                    ))}
+              {chats && (
+                <div className="flex flex-col gap-2">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input className="pl-9" placeholder="Chercher une discussion" value={chatQuery} onChange={(e) => setChatQuery(e.target.value)} />
+                  </div>
+                  <div className="flex max-h-56 flex-col gap-1 overflow-y-auto">
+                    {(() => {
+                      const already = new Set(contacts.filter((c) => c.category === category).map((c) => c.phone))
+                      const q = chatQuery.trim().toLowerCase()
+                      const list = chats.filter((c) => !already.has(c.id) && (!q || `${c.name} ${c.detail ?? ''}`.toLowerCase().includes(q)))
+                      if (list.length === 0) {
+                        return (
+                          <p className="text-xs text-muted-foreground">
+                            Aucune discussion trouvée. Les contacts apparaissent au fil des messages reçus ; les groupes, eux, sont tous là.
+                          </p>
+                        )
+                      }
+                      return list.slice(0, 150).map((c) => (
+                        <label key={c.id} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-secondary">
+                          <input
+                            type="checkbox"
+                            className="size-4"
+                            style={{ accentColor: 'var(--primary)' }}
+                            checked={picked.has(c.id)}
+                            onChange={() =>
+                              setPicked((p) => {
+                                const next = new Set(p)
+                                if (next.has(c.id)) next.delete(c.id)
+                                else next.add(c.id)
+                                return next
+                              })
+                            }
+                          />
+                          {c.kind === 'groupe' && <Users className="size-3.5 shrink-0 text-muted-foreground" />}
+                          <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                          {c.detail && <span className="shrink-0 text-xs text-muted-foreground">{c.detail}</span>}
+                        </label>
+                      ))
+                    })()}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={addPicked} disabled={picked.size === 0}>
+                      <Plus className="size-4" /> Ajouter{picked.size > 0 ? ` (${picked.size})` : ''} au tableau {CATEGORY_LABEL[category]}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setChats(null)}>
+                      Fermer
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -438,6 +503,27 @@ export function WhatsAppShareStatus({ intervention, refreshKey }: { intervention
     setTaken(await setTakenBy(session.sessionId, intervention.id, contactId).catch(() => takenBy))
   }
 
+  // Fiche complète à celui qui a pris l'intervention : directement si
+  // WhatsApp est relié, sinon en ouvrant sa conversation.
+  const { wa } = useWhatsAppSession()
+  const [ficheSent, setFicheSent] = React.useState<'envoi' | 'ok' | string | null>(null)
+  const sendFiche = async () => {
+    if (!session || !takenBy) return
+    const recipient = recipients.find((x) => x.contact_id === takenBy.contactId)
+    if (wa?.status === 'connecte') {
+      setFicheSent('envoi')
+      try {
+        await sendDirect(session.sessionId, intervention.id, [takenBy.contactId], ficheText(intervention))
+        setFicheSent('ok')
+      } catch (e) {
+        setFicheSent(friendlyError(e, "Erreur d'envoi."))
+      }
+    } else if (recipient?.phone && !isGroup(recipient.phone)) {
+      window.open(whatsappLink(recipient.phone, ficheText(intervention)), '_blank')
+      setFicheSent('ok')
+    }
+  }
+
   if (shares.length === 0 && !takenBy) return null
   const owed = takenBy && intervention.amount != null ? (intervention.amount * takenBy.percent) / 100 : null
 
@@ -469,6 +555,16 @@ export function WhatsAppShareStatus({ intervention, refreshKey }: { intervention
               </Button>
             ))}
           </div>
+          {takenBy && (
+            <div className="flex flex-col gap-1.5">
+              <Button size="sm" className="w-fit" onClick={sendFiche} disabled={ficheSent === 'envoi'}>
+                {ficheSent === 'envoi' ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
+                Envoyer la fiche complète à {takenBy.name}
+              </Button>
+              {ficheSent === 'ok' && <p className="text-xs text-success">Fiche envoyée.</p>}
+              {ficheSent && ficheSent !== 'ok' && ficheSent !== 'envoi' && <p className="text-xs text-destructive">{ficheSent}</p>}
+            </div>
+          )}
           {takenBy && (
             <p className="text-sm">
               {takenBy.name} · {takenBy.percent === 50 ? '50/50' : `${takenBy.percent} %`}

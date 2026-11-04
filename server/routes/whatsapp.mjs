@@ -3,7 +3,7 @@ import { Router } from 'express'
 import { requireAdmin, requireAuth } from '../auth.mjs'
 import { db, now, uuid } from '../db.mjs'
 import { broadcast } from '../events.mjs'
-import { connect, listGroups, logout, sendQueued, sessionStatus } from '../whatsappSession.mjs'
+import { connect, listChats, listGroups, logout, sendQueued, sessionStatus } from '../whatsappSession.mjs'
 
 // Envoi des fiches sur WhatsApp à des contacts, classés en deux listes :
 // « 25 % » (techniciens) et « 50/50 » (partenaires). WhatsApp ne laisse pas
@@ -57,7 +57,7 @@ const PERCENT = { 25: 25, 50: 50 }
 
 function cleanPhone(raw) {
   // Groupe WhatsApp (choisi dans la liste des groupes du WhatsApp relié).
-  if (/^[\d-]+@g\.us$/.test(String(raw ?? '').trim())) return String(raw).trim()
+  if (/^[\w.-]+@(g\.us|s\.whatsapp\.net|lid)$/.test(String(raw ?? '').trim())) return String(raw).trim()
   const digits = String(raw ?? '').replace(/[^\d+]/g, '')
   if (/^0[1-9]\d{8}$/.test(digits)) return digits
   if (/^\+33[1-9]\d{8}$/.test(digits)) return `0${digits.slice(3)}`
@@ -88,6 +88,42 @@ whatsappRouter.post('/session/connect', async (req, res) => {
 whatsappRouter.post('/session/logout', async (req, res) => {
   await logout(req.caller.team_id)
   res.json(sessionStatus(req.caller.team_id))
+})
+
+whatsappRouter.get('/chats', async (req, res) => {
+  try {
+    res.json(await listChats(req.caller.team_id))
+  } catch (e) {
+    res.status(e.status ?? 502).json({ error: e.status ? e.message : 'Impossible de lire tes discussions WhatsApp.' })
+  }
+})
+
+// Ajout de plusieurs destinataires d'un coup (choisis dans les discussions WhatsApp).
+whatsappRouter.post('/contacts/bulk', (req, res) => {
+  const category = String(req.body?.category ?? '')
+  if (!CATEGORIES.has(category)) return res.status(400).json({ error: 'Liste invalide.' })
+  const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 200) : []
+  const existing = new Set(
+    db.prepare('SELECT phone FROM whatsapp_contacts WHERE team_id = ? AND category = ?').all(req.caller.team_id, category).map((r) => r.phone),
+  )
+  const added = []
+  for (const it of items) {
+    const name = String(it?.name ?? '').trim().slice(0, 80)
+    const phone = cleanPhone(it?.id)
+    if (!name || !phone || existing.has(phone)) continue
+    const id = uuid()
+    db.prepare('INSERT INTO whatsapp_contacts (id, team_id, name, phone, category, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+      id,
+      req.caller.team_id,
+      name,
+      phone,
+      category,
+      now(),
+    )
+    existing.add(phone)
+    added.push({ id, name, phone, category })
+  }
+  res.json(added)
 })
 
 whatsappRouter.get('/groups', async (req, res) => {

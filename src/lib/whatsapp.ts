@@ -111,6 +111,19 @@ export const sendDirect = (sessionId: string, interventionId: string, contactIds
 
 export const isGroup = (phone: string) => phone.endsWith('@g.us')
 
+// Discussion du WhatsApp relié (contact ou groupe), proposée comme destinataire.
+export interface WhatsAppChat {
+  id: string
+  name: string
+  kind: 'contact' | 'groupe'
+  detail: string | null
+}
+
+export const listChats = (sessionId: string) => apiFetch<WhatsAppChat[]>('/api/whatsapp/chats', { sessionId })
+
+export const addContactsBulk = (sessionId: string, category: ShareCategory, items: { id: string; name: string }[]) =>
+  apiFetch<WhatsAppContact[]>('/api/whatsapp/contacts/bulk', { method: 'POST', sessionId, body: { category, items } })
+
 export const listContacts = (sessionId: string) => apiFetch<WhatsAppContact[]>('/api/whatsapp/contacts', { sessionId })
 
 export const addContact = (sessionId: string, contact: Omit<WhatsAppContact, 'id'>) =>

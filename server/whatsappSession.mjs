@@ -34,6 +34,46 @@ const sessions = new Map() // teamId -> { sock, status, qr, me, groups }
 
 const authDir = (teamId) => path.join(authRoot, String(teamId).replace(/[^\w-]/g, ''))
 
+// Discussions connues du WhatsApp relié (nom + identifiant), apprises au fil
+// des synchronisations envoyées par le téléphone — pour choisir ses
+// destinataires dans une liste au lieu de taper les numéros.
+const chatsFile = (teamId) => path.join(authDir(teamId), 'intervia-chats.json')
+
+function loadChats(teamId) {
+  try {
+    return JSON.parse(fs.readFileSync(chatsFile(teamId), 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
+let saveTimer = null
+function rememberChats(teamId, entries) {
+  const s = sessions.get(teamId)
+  if (!s) return
+  s.chats = s.chats ?? loadChats(teamId)
+  let changed = false
+  for (const e of entries) {
+    const id = e?.id
+    if (!id || id === 'status@broadcast' || id.endsWith('@newsletter') || id.endsWith('@broadcast')) continue
+    const name = e.name || e.subject || e.notify || e.verifiedName || s.chats[id]?.name || null
+    const phone = e.phoneNumber || s.chats[id]?.phone || (id.endsWith('@s.whatsapp.net') ? id.split('@')[0] : null)
+    if (!s.chats[id] || (name && s.chats[id].name !== name) || (phone && s.chats[id].phone !== phone)) {
+      s.chats[id] = { name, phone }
+      changed = true
+    }
+  }
+  if (!changed) return
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    try {
+      fs.writeFileSync(chatsFile(teamId), JSON.stringify(s.chats))
+    } catch {
+      // volume indisponible : la liste se reconstruira
+    }
+  }, 2000)
+}
+
 function setState(teamId, patch) {
   const s = sessions.get(teamId) ?? { status: 'deconnecte' }
   Object.assign(s, patch)
@@ -65,6 +105,16 @@ export async function connect(teamId) {
   setState(teamId, { sock, status: 'connexion', qr: null })
 
   sock.ev.on('creds.update', saveCreds)
+  sock.ev.on('messaging-history.set', ({ chats = [], contacts = [] }) => rememberChats(teamId, [...contacts, ...chats]))
+  sock.ev.on('contacts.upsert', (contacts) => rememberChats(teamId, contacts))
+  sock.ev.on('contacts.update', (contacts) => rememberChats(teamId, contacts))
+  sock.ev.on('chats.upsert', (chats) => rememberChats(teamId, chats))
+  sock.ev.on('messages.upsert', ({ messages = [] }) =>
+    rememberChats(
+      teamId,
+      messages.filter((m) => !m.key?.fromMe && m.pushName && !m.key?.remoteJid?.endsWith('@g.us')).map((m) => ({ id: m.key.remoteJid, notify: m.pushName })),
+    ),
+  )
   sock.ev.on('connection.update', async (u) => {
     if (sessions.get(teamId)?.sock !== sock) return
     if (u.qr) setState(teamId, { status: 'qr', qr: await QRCode.toDataURL(u.qr, { margin: 1, width: 320 }) })
@@ -113,6 +163,23 @@ function connectedSock(teamId) {
   return s.sock
 }
 
+// Discussions individuelles + groupes, pour le choix des destinataires.
+export async function listChats(teamId) {
+  const groups = await listGroups(teamId)
+  const known = sessions.get(teamId)?.chats ?? loadChats(teamId)
+  const people = Object.entries(known)
+    .filter(([id]) => id.endsWith('@s.whatsapp.net') || id.endsWith('@lid'))
+    .map(([id, c]) => {
+      const number = c.phone ? String(c.phone).replace(/@.*/, '') : null
+      const local = number && number.startsWith('33') && number.length === 11 ? `0${number.slice(2)}` : number ? `+${number}` : null
+      return { id: local ?? id, name: c.name || local || 'Contact', kind: 'contact', detail: local }
+    })
+  return [
+    ...groups.map((g) => ({ id: g.id, name: g.name, kind: 'groupe', detail: `${g.size} membres` })),
+    ...people.sort((a, b) => a.name.localeCompare(b.name)),
+  ]
+}
+
 export async function listGroups(teamId) {
   const groups = await connectedSock(teamId).groupFetchAllParticipating()
   return Object.values(groups)
@@ -123,7 +190,7 @@ export async function listGroups(teamId) {
 // « 06 12 34 56 78 » → identifiant WhatsApp ; un groupe garde son identifiant (…@g.us).
 export function toJid(phoneOrGroup) {
   const v = String(phoneOrGroup ?? '').trim()
-  if (v.endsWith('@g.us')) return v
+  if (v.includes('@')) return v
   const digits = v.replace(/[^\d+]/g, '')
   const intl = digits.startsWith('+') ? digits.slice(1) : /^0\d{9}$/.test(digits) ? `33${digits.slice(1)}` : digits.replace(/^00/, '')
   return `${intl}@s.whatsapp.net`
