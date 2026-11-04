@@ -42,6 +42,8 @@ import {
   type DiscountType,
   type DocumentItem,
   type PseDocument,
+  isValidItem,
+  pruneItems,
 } from '@/lib/documents'
 import { friendlyError } from '@/lib/errors'
 
@@ -101,7 +103,7 @@ export default function DevisEdit() {
     return () => {
       const { session, doc, form, items } = latestRef.current
       if (!session || !doc) return
-      const isEmpty = !form.clientFirstName.trim() && !form.clientLastName.trim() && items.length === 0
+      const isEmpty = !form.clientFirstName.trim() && !form.clientLastName.trim() && !items.some(isValidItem)
       if (isEmpty) {
         deleteDocument(session.sessionId, doc.id).catch(() => {})
       }
@@ -162,6 +164,17 @@ export default function DevisEdit() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form, items, photosBefore])
+
+  // Dès qu'on referme un article ou qu'on passe à un autre, ceux restés sans
+  // titre ou sans prix disparaissent (ils ne sont de toute façon jamais enregistrés).
+  React.useEffect(() => {
+    const pruned = pruneItems(items, expandedItem)
+    if (pruned.items.length === items.length) return
+    setItems(pruned.items)
+    if (pruned.index !== expandedItem) setExpandedItem(pruned.index)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedItem])
+
 
   // Empêche qu'une sauvegarde automatique déjà "en vol" (déclenchée par le
   // minuteur juste avant qu'on agisse) ne finisse par écraser l'état juste

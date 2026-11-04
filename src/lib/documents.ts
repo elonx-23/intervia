@@ -27,6 +27,24 @@ export interface DocumentItem {
   itemType: 'service' | 'materiel'
 }
 
+// Un article n'est valable qu'avec au minimum un titre et un prix : sinon il
+// n'est jamais enregistré (même règle côté serveur, voir validItems).
+export function isValidItem(item: DocumentItem) {
+  return item.label.trim() !== '' && Number.isFinite(item.unitPrice) && item.unitPrice !== 0
+}
+
+// Retire les articles incomplets, sauf celui en cours de saisie (keepIndex),
+// et renvoie la nouvelle position de ce dernier.
+export function pruneItems(items: DocumentItem[], keepIndex: number | null) {
+  const kept: DocumentItem[] = []
+  let index: number | null = null
+  items.forEach((item, i) => {
+    if (i === keepIndex) index = kept.length
+    if (i === keepIndex || isValidItem(item)) kept.push(item)
+  })
+  return { items: kept, index }
+}
+
 export interface PseDocument {
   id: string
   kind: DocumentKind

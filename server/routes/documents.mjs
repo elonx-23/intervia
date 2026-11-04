@@ -31,6 +31,17 @@ function toApi(row) {
   }
 }
 
+// Un article n'est valable qu'avec au minimum un titre et un prix : les lignes
+// incomplètes (ajoutées puis laissées vides) ne sont jamais enregistrées, donc
+// jamais sur le PDF, l'email ni la facture issue d'un devis.
+function validItems(items) {
+  if (!Array.isArray(items)) return []
+  return items.filter((i) => {
+    const price = Number(i?.unitPrice)
+    return String(i?.label ?? '').trim() !== '' && Number.isFinite(price) && price !== 0
+  })
+}
+
 function itemsTotalHT(items) {
   return items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0)
 }
@@ -503,7 +514,7 @@ documentsRouter.post('/', (req, res) => {
   const kind = b.kind === 'facture' ? 'facture' : 'devis'
   const status = kind === 'facture' ? 'emise' : 'brouillon'
   const id = uuid()
-  const items = JSON.stringify(b.items ?? [])
+  const items = JSON.stringify(validItems(b.items ?? []))
 
   db.prepare(
     `INSERT INTO documents
@@ -571,7 +582,7 @@ documentsRouter.patch('/:id', (req, res) => {
     b.postalCode ?? existing.postal_code,
     b.city ?? existing.city,
     b.email ?? existing.email,
-    b.items ? JSON.stringify(b.items) : existing.items,
+    b.items ? JSON.stringify(validItems(b.items)) : existing.items,
     b.vatRate ?? existing.vat_rate,
     b.notes ?? existing.notes,
     b.issueDate ?? existing.issue_date,
