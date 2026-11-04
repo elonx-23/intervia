@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { NumberInput } from '@/components/NumberInput'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -513,20 +514,11 @@ export default function DevisEdit() {
                         <div className="grid grid-cols-2 gap-2">
                           <div className="flex flex-col gap-1">
                             <Label className="text-xs text-muted-foreground">Quantité</Label>
-                            <Input
-                              type="number"
-                              value={item.quantity}
-                              onChange={(e) => updateItem(i, { quantity: Number(e.target.value) })}
-                            />
+                            <NumberInput value={item.quantity} onValueChange={(quantity) => updateItem(i, { quantity })} placeholder="1" />
                           </div>
                           <div className="flex flex-col gap-1">
                             <Label className="text-xs text-muted-foreground">Prix unitaire (€)</Label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={item.unitPrice}
-                              onChange={(e) => updateItem(i, { unitPrice: Number(e.target.value) })}
-                            />
+                            <NumberInput value={item.unitPrice} onValueChange={(unitPrice) => updateItem(i, { unitPrice })} />
                           </div>
                         </div>
                       </div>
@@ -620,14 +612,7 @@ export default function DevisEdit() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <Input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        placeholder="Montant"
-                        value={form.discountValue === 0 ? '' : Math.abs(form.discountValue)}
-                        onChange={(e) => setAbsDiscountValue(Number(e.target.value))}
-                      />
+                      <NumberInput placeholder="Montant" value={Math.abs(form.discountValue)} onValueChange={(v) => setAbsDiscountValue(Math.abs(v))} />
                     </div>
 
                     <div className="flex flex-col gap-2">
