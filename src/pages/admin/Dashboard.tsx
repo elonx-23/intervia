@@ -1,5 +1,6 @@
 import {
   PhoneIncoming,
+  QrCode,
   AlertTriangle,
   CalendarClock,
   CheckCircle2,
@@ -164,6 +165,13 @@ export default function Dashboard() {
           <Button size="lg" variant="outline" className="h-14 w-full gap-2.5 text-base">
             <PhoneIncoming className="size-5" />
             Appels reçus
+          </Button>
+        </Link>
+
+        <Link to="/paiements">
+          <Button size="lg" variant="outline" className="h-14 w-full gap-2.5 text-base">
+            <QrCode className="size-5" />
+            Lien de paiement
           </Button>
         </Link>
 

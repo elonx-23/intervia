@@ -45,6 +45,8 @@ const NotificationSettings = React.lazy(() => import('@/pages/settings/Notificat
 const PrivacySettings = React.lazy(() => import('@/pages/settings/PrivacySettings'))
 const RegionSettings = React.lazy(() => import('@/pages/settings/RegionSettings'))
 const WhatsAppSettings = React.lazy(() => import('@/pages/settings/WhatsAppSettings'))
+const IntegrationsSettings = React.lazy(() => import('@/pages/settings/IntegrationsSettings'))
+const PaymentLinks = React.lazy(() => import('@/pages/payments/PaymentLinks'))
 const SecuritySettings = React.lazy(() => import('@/pages/settings/SecuritySettings'))
 const SubscriptionSettings = React.lazy(() => import('@/pages/settings/SubscriptionSettings'))
 const TermsSettings = React.lazy(() => import('@/pages/settings/TermsSettings'))
@@ -125,6 +127,8 @@ function AppRoutes() {
                 <Route path="/reglages/telephonie" element={<Navigate to="/telephonie" replace />} />
                 <Route path="/reglages/region" element={<RegionSettings />} />
                 <Route path="/reglages/whatsapp" element={<WhatsAppSettings />} />
+                <Route path="/reglages/integrations" element={<IntegrationsSettings />} />
+                <Route path="/paiements" element={<PaymentLinks />} />
                 <Route path="/reglages/securite" element={<SecuritySettings />} />
                 <Route path="/reglages/sauvegardes" element={<BackupSettings />} />
               </>
