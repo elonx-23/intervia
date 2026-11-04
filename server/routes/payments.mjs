@@ -8,8 +8,8 @@ import {
   integrationsOverview,
   listPaymentLinks,
   removeIntegration,
+  savePaypalKeys,
   saveStripeKey,
-  saveZettleKeys,
   setDefaultProvider,
 } from '../paymentLinks.mjs'
 
@@ -42,9 +42,9 @@ paymentsRouter.put(
 )
 
 paymentsRouter.put(
-  '/integrations/zettle',
+  '/integrations/paypal',
   wrap(async (req, res) => {
-    await saveZettleKeys(req.caller.team_id, req.body?.clientId, req.body?.apiKey)
+    await savePaypalKeys(req.caller.team_id, req.body?.clientId, req.body?.secret)
     res.json(integrationsOverview(req.caller.team_id))
   }),
 )
@@ -67,9 +67,20 @@ paymentsRouter.get(
   wrap(async (req, res) => res.json(await listPaymentLinks(req.caller.team_id))),
 )
 
+// Adresse de l'app telle que l'admin l'utilise (ex. https://app.intervia.info) :
+// c'est elle qui figure dans les liens PayPal /payer/:id.
+const baseUrlOf = (req) => {
+  const proto = String(req.get('x-forwarded-proto') ?? req.protocol)
+    .split(',')[0]
+    .trim()
+  return req.get('host') ? `${proto}://${req.get('host')}` : process.env.PUBLIC_URL
+}
+
 paymentsRouter.post(
   '/links',
-  wrap(async (req, res) => res.json(await createPaymentLink(req.caller.team_id, req.caller.user_id, req.body ?? {}))),
+  wrap(async (req, res) =>
+    res.json(await createPaymentLink(req.caller.team_id, req.caller.user_id, req.body ?? {}, { baseUrl: baseUrlOf(req) })),
+  ),
 )
 
 paymentsRouter.post(

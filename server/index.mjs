@@ -25,6 +25,7 @@ import { reportsRouter } from './routes/reports.mjs'
 import { telephonyRouter } from './routes/telephony.mjs'
 import { whatsappRouter } from './routes/whatsapp.mjs'
 import { paymentsRouter } from './routes/payments.mjs'
+import { payPublicRouter } from './routes/payPublic.mjs'
 import { restoreSessions } from './whatsappSession.mjs'
 import { telnyxWebhookRouter } from './routes/telnyxWebhooks.mjs'
 import { startCronJobs } from './cron.mjs'
@@ -88,6 +89,8 @@ app.use('/api/reports', reportsRouter)
 app.use('/api/telephony', telephonyRouter)
 app.use('/api/whatsapp', whatsappRouter)
 app.use('/api/payments', paymentsRouter)
+// Lien de paiement PayPal ouvert par le client d'une entreprise (page publique).
+app.use('/payer', payPublicRouter)
 
 // Sert le frontend buildé (npm run build → dist/) depuis ce même serveur,
 // sur le même port/origine que l'API — c'est ce que suppose déjà le

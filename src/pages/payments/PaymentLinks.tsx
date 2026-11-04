@@ -4,6 +4,7 @@ import * as React from 'react'
 import { Link } from 'react-router-dom'
 
 import { Page } from '@/components/layout/Page'
+import { useLiveEvents } from '@/hooks/useLiveEvents'
 import { NumberInput } from '@/components/NumberInput'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -139,6 +140,9 @@ export default function PaymentLinks() {
     loadLinks()
   }, [session, loadLinks])
 
+  // Un client vient de payer (retour de PayPal) : la liste se met à jour seule.
+  useLiveEvents(['payments_changed'], loadLinks)
+
   const generate = async () => {
     if (!session) return
     setBusy(true)
@@ -163,8 +167,9 @@ export default function PaymentLinks() {
     loadLinks()
   }
 
-  const connected = integrations && (integrations.stripe.connected || integrations.zettle.connected)
-  const both = integrations?.stripe.connected && integrations?.zettle.connected
+  const connected = integrations && (integrations.stripe.connected || integrations.paypal.connected)
+  const both = integrations?.stripe.connected && integrations?.paypal.connected
+  const testMode = provider != null && integrations?.[provider].mode === 'test'
 
   return (
     <Page title="Lien de paiement">
@@ -172,7 +177,7 @@ export default function PaymentLinks() {
         {integrations && !connected && (
           <Card>
             <CardContent className="flex flex-col gap-2">
-              <p className="text-sm">Pour créer des liens de paiement, relie d'abord ton compte Stripe ou PayPal POS.</p>
+              <p className="text-sm">Pour créer des liens de paiement, relie d'abord ton compte Stripe ou PayPal.</p>
               <Button asChild className="w-fit">
                 <Link to="/reglages/integrations">Ouvrir Réglages → Intégrations</Link>
               </Button>
@@ -187,7 +192,7 @@ export default function PaymentLinks() {
                 <SegmentedControl
                   options={[
                     { value: 'stripe', label: 'Stripe' },
-                    { value: 'zettle', label: 'PayPal POS' },
+                    { value: 'paypal', label: 'PayPal' },
                   ]}
                   value={provider}
                   onChange={setProvider}
@@ -201,6 +206,12 @@ export default function PaymentLinks() {
                 <Label>Motif</Label>
                 <Input placeholder="Ex. Ouverture de porte, facture FAC-012…" value={description} onChange={(e) => setDescription(e.target.value)} />
               </div>
+              {testMode && (
+                <p className="rounded-xl bg-tone-amber-soft px-3 py-2 text-xs text-tone-amber-ink">
+                  Mode test : ce lien n'encaisse pas de vrai argent. Pour de vrais paiements, mets tes identifiants Live dans Réglages →
+                  Intégrations.
+                </p>
+              )}
               {error && <p className="text-sm text-destructive">{error}</p>}
               <Button size="lg" onClick={generate} disabled={busy || amount < 1 || !description.trim()}>
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <QrCode className="size-4" />}

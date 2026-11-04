@@ -1,10 +1,10 @@
 import { apiFetch } from '@/lib/api'
 
-export type PaymentProvider = 'stripe' | 'zettle'
+export type PaymentProvider = 'stripe' | 'paypal'
 
 export interface IntegrationsOverview {
   stripe: { connected: boolean; key: string | null; mode: 'live' | 'test' | null }
-  zettle: { connected: boolean; clientId: string | null }
+  paypal: { connected: boolean; clientId: string | null; mode: 'live' | 'test' | null }
   defaultProvider: PaymentProvider | null
 }
 
@@ -20,13 +20,13 @@ export interface PaymentLink {
   created_at: string
 }
 
-export const PROVIDER_LABEL: Record<PaymentProvider, string> = { stripe: 'Stripe', zettle: 'PayPal POS' }
+export const PROVIDER_LABEL: Record<PaymentProvider, string> = { stripe: 'Stripe', paypal: 'PayPal' }
 
 export const getIntegrations = (sessionId: string) => apiFetch<IntegrationsOverview>('/api/payments/integrations', { sessionId })
 export const saveStripe = (sessionId: string, secretKey: string) =>
   apiFetch<IntegrationsOverview>('/api/payments/integrations/stripe', { method: 'PUT', sessionId, body: { secretKey } })
-export const saveZettle = (sessionId: string, clientId: string, apiKey: string) =>
-  apiFetch<IntegrationsOverview>('/api/payments/integrations/zettle', { method: 'PUT', sessionId, body: { clientId, apiKey } })
+export const savePaypal = (sessionId: string, clientId: string, secret: string) =>
+  apiFetch<IntegrationsOverview>('/api/payments/integrations/paypal', { method: 'PUT', sessionId, body: { clientId, secret } })
 export const removeIntegration = (sessionId: string, provider: PaymentProvider) =>
   apiFetch<IntegrationsOverview>(`/api/payments/integrations/${provider}`, { method: 'DELETE', sessionId })
 export const setDefaultProvider = (sessionId: string, provider: PaymentProvider) =>

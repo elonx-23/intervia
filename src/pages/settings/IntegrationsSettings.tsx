@@ -10,22 +10,22 @@ import { friendlyError } from '@/lib/errors'
 import {
   getIntegrations,
   removeIntegration,
+  savePaypal,
   saveStripe,
-  saveZettle,
   setDefaultProvider,
   type IntegrationsOverview,
   type PaymentProvider,
 } from '@/lib/payments'
 
 // Réglages → Intégrations : les clés de paiement de l'entreprise (Stripe ou
-// PayPal POS / Zettle), pour générer des liens de paiement. Vérifiées à
-// l'enregistrement, gardées côté serveur, jamais réaffichées en clair.
+// PayPal), pour générer des liens de paiement. Vérifiées à l'enregistrement,
+// gardées côté serveur, jamais réaffichées en clair.
 export default function IntegrationsSettings() {
   const { session } = useAuth()
   const [data, setData] = React.useState<IntegrationsOverview | null>(null)
   const [stripeKey, setStripeKey] = React.useState('')
-  const [zettleId, setZettleId] = React.useState('')
-  const [zettleKey, setZettleKey] = React.useState('')
+  const [paypalId, setPaypalId] = React.useState('')
+  const [paypalSecret, setPaypalSecret] = React.useState('')
   const [busy, setBusy] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -43,8 +43,8 @@ export default function IntegrationsSettings() {
     try {
       setData(await action(session.sessionId))
       setStripeKey('')
-      setZettleId('')
-      setZettleKey('')
+      setPaypalId('')
+      setPaypalSecret('')
     } catch (e) {
       setError(friendlyError(e, 'Erreur, réessaie.'))
     } finally {
@@ -52,8 +52,17 @@ export default function IntegrationsSettings() {
     }
   }
 
-  const both = data?.stripe.connected && data?.zettle.connected
-  const DefaultChoice = ({ provider }: { provider: PaymentProvider }) =>
+  // Client ID et Secret collés d'un coup dans le premier champ : on les répartit.
+  const onPaypalId = (value: string) => {
+    const parts = value.trim().split(/\s+/)
+    if (parts.length === 2 && !paypalSecret) {
+      setPaypalId(parts[0])
+      setPaypalSecret(parts[1])
+    } else setPaypalId(value)
+  }
+
+  const both = data?.stripe.connected && data?.paypal.connected
+  const defaultChoice = (provider: PaymentProvider) =>
     both ? (
       data?.defaultProvider === provider ? (
         <p className="text-xs font-medium text-primary">Utilisé par défaut pour les liens de paiement</p>
@@ -91,7 +100,7 @@ export default function IntegrationsSettings() {
                       <CheckCircle2 className="size-4 text-success" /> Relié · clé {data.stripe.key}
                       {data.stripe.mode === 'test' ? ' · mode test' : ''}
                     </p>
-                    <DefaultChoice provider="stripe" />
+                    {defaultChoice('stripe')}
                     <Button variant="ghost" size="sm" className="w-fit text-destructive" disabled={busy !== null} onClick={() => run('rm-stripe', (id) => removeIntegration(id, 'stripe'))}>
                       Retirer la clé
                     </Button>
@@ -117,33 +126,42 @@ export default function IntegrationsSettings() {
             <Card>
               <CardContent className="flex flex-col gap-3">
                 <div className="flex items-center gap-3">
-                  <Wallet className="size-6 text-[#003087]" />
+                  <Wallet className="size-6 text-[#003087] dark:text-[#6ea8ff]" />
                   <div>
-                    <p className="font-semibold">PayPal POS (Zettle)</p>
-                    <p className="text-xs text-muted-foreground">Ton compte PayPal POS</p>
+                    <p className="font-semibold">PayPal</p>
+                    <p className="text-xs text-muted-foreground">Compte PayPal ou carte bancaire, sans compte</p>
                   </div>
                 </div>
-                {data.zettle.connected ? (
+                {data.paypal.connected ? (
                   <>
                     <p className="flex items-center gap-2 text-sm">
-                      <CheckCircle2 className="size-4 text-success" /> Relié · Client ID {data.zettle.clientId}
+                      <CheckCircle2 className="size-4 text-success" /> Relié · Client ID {data.paypal.clientId}
+                      {data.paypal.mode === 'test' ? ' · mode test' : ''}
                     </p>
-                    <DefaultChoice provider="zettle" />
-                    <Button variant="ghost" size="sm" className="w-fit text-destructive" disabled={busy !== null} onClick={() => run('rm-zettle', (id) => removeIntegration(id, 'zettle'))}>
-                      Retirer les clés
+                    {data.paypal.mode === 'test' && (
+                      <p className="rounded-xl bg-tone-amber-soft px-3 py-2 text-xs text-tone-amber-ink">
+                        Identifiants de test (Sandbox) : les paiements sont fictifs. Pour encaisser pour de vrai, retire-les et colle ceux de
+                        ton app PayPal en mode Live.
+                      </p>
+                    )}
+                    {defaultChoice('paypal')}
+                    <Button variant="ghost" size="sm" className="w-fit text-destructive" disabled={busy !== null} onClick={() => run('rm-paypal', (id) => removeIntegration(id, 'paypal'))}>
+                      Retirer les identifiants
                     </Button>
                   </>
                 ) : (
                   <>
-                    <Input autoComplete="off" placeholder="Client ID" value={zettleId} onChange={(e) => setZettleId(e.target.value)} />
-                    <Input type="password" autoComplete="off" placeholder="Clé API" value={zettleKey} onChange={(e) => setZettleKey(e.target.value)} />
-                    <p className="text-xs text-muted-foreground">Sur developer.zettle.com : crée une intégration, puis copie son Client ID et sa clé API.</p>
+                    <Input autoComplete="off" placeholder="Client ID" value={paypalId} onChange={(e) => onPaypalId(e.target.value)} />
+                    <Input type="password" autoComplete="off" placeholder="Secret" value={paypalSecret} onChange={(e) => setPaypalSecret(e.target.value)} />
+                    <p className="text-xs text-muted-foreground">
+                      Sur developer.paypal.com → Apps &amp; Credentials, en mode Live : ouvre ton app et copie son Client ID et son Secret.
+                    </p>
                     <Button
                       className="w-fit"
-                      disabled={!zettleId.trim() || !zettleKey.trim() || busy !== null}
-                      onClick={() => run('zettle', (id) => saveZettle(id, zettleId, zettleKey))}
+                      disabled={!paypalId.trim() || !paypalSecret.trim() || busy !== null}
+                      onClick={() => run('paypal', (id) => savePaypal(id, paypalId, paypalSecret))}
                     >
-                      {busy === 'zettle' ? <Loader2 className="size-4 animate-spin" /> : 'Enregistrer'}
+                      {busy === 'paypal' ? <Loader2 className="size-4 animate-spin" /> : 'Enregistrer'}
                     </Button>
                   </>
                 )}
