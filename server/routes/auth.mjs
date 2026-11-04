@@ -2,7 +2,7 @@ import { Router } from 'express'
 
 import { db, logLoginAttempt, now, uuid } from '../db.mjs'
 import { getCaller, requireAdmin, requireAuth, sessionPayloadForUser } from '../auth.mjs'
-import { verifyPassword } from '../password.mjs'
+import { hashPassword, passwordError, verifyPassword } from '../password.mjs'
 import { rateLimit } from '../rateLimit.mjs'
 import { clientIp, listDevices, recordNewSession, revokeDevices } from '../deviceSessions.mjs'
 
@@ -42,6 +42,34 @@ authRouter.post('/login-email', loginLimiter, (req, res) => {
   recordNewSession(sessionId, user, req)
 
   res.json(sessionPayloadForUser(user, sessionId))
+})
+
+// Changement de mot de passe depuis Réglages → Mon compte : l'ancien est
+// obligatoire, le nouveau est saisi deux fois (recontrôlé ici, pas seulement
+// à l'écran). Les autres appareils sont déconnectés ensuite — si quelqu'un
+// d'autre avait le mot de passe, il perd l'accès tout de suite.
+const passwordChangeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 8 })
+
+authRouter.post('/password', requireAuth, passwordChangeLimiter, (req, res) => {
+  const { currentPassword, newPassword, confirmPassword } = req.body ?? {}
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.caller.user_id)
+  if (!user) return res.status(404).json({ error: 'Compte introuvable.' })
+  if (typeof currentPassword !== 'string' || !verifyPassword(currentPassword, user.password_hash)) {
+    logLoginAttempt(user.email, 'password_change', false, clientIp(req))
+    return res.status(400).json({ error: 'Le mot de passe actuel est incorrect.' })
+  }
+  if (typeof newPassword !== 'string' || newPassword !== confirmPassword) {
+    return res.status(400).json({ error: 'Les deux nouveaux mots de passe ne sont pas identiques.' })
+  }
+  const rule = passwordError(newPassword)
+  if (rule) return res.status(400).json({ error: rule })
+  if (verifyPassword(newPassword, user.password_hash)) {
+    return res.status(400).json({ error: "Le nouveau mot de passe doit être différent de l'ancien." })
+  }
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(newPassword), user.id)
+  const disconnected = revokeDevices(user.id, req.sessionId, 'autres')
+  db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(user.id)
+  res.json({ ok: true, disconnected })
 })
 
 // Appareils connectés au compte de l'appelant (Réglages → Sécurité).

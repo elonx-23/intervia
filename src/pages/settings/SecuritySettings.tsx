@@ -160,7 +160,7 @@ export default function SecuritySettings() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{a.identifier}</p>
                     <p className="text-xs text-muted-foreground">
-                      {a.method === 'code' ? 'Code technicien' : 'Email/mot de passe'} · {formatWhen(a.created_at)}
+                      {a.method === 'code' ? 'Code technicien' : a.method === 'password_change' ? 'Changement de mot de passe' : 'Email/mot de passe'} · {formatWhen(a.created_at)}
                       {a.ip ? ` · ${a.ip}` : ''}
                     </p>
                   </div>

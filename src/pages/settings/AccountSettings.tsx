@@ -1,5 +1,6 @@
 import * as React from 'react'
 
+import { ChangePasswordCard } from '@/components/ChangePasswordCard'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -74,6 +75,8 @@ export default function AccountSettings() {
         <Button onClick={save} disabled={busy}>
           {busy ? 'Enregistrement…' : 'Enregistrer'}
         </Button>
+
+        <ChangePasswordCard />
       </div>
     </Page>
   )

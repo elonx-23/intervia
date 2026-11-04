@@ -2,7 +2,7 @@ import { apiFetch } from '@/lib/api'
 
 export interface LoginAttempt {
   identifier: string
-  method: 'code' | 'email'
+  method: 'code' | 'email' | 'password_change'
   ip: string | null
   created_at: string
 }
