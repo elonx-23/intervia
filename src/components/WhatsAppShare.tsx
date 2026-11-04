@@ -166,13 +166,24 @@ function SendDialog({
     setMessage(m === 'fiche' ? ficheText(intervention) : shortCode(intervention))
   }
 
+  // Total des destinataires : ceux cochés dans le tableau + les discussions
+  // WhatsApp sélectionnées (ajoutées au tableau au moment de l'envoi).
+  const recipientCount = chosen.length + (direct ? picked.size : 0)
+
   const send = async () => {
-    if (!session || chosen.length === 0) return
+    if (!session || recipientCount === 0) return
     setBusy(true)
     setError(null)
     try {
       if (direct) {
-        const ids = chosen.map((c) => c.id)
+        let fromChats: WhatsAppContact[] = []
+        if (picked.size > 0 && chats) {
+          const items = chats.filter((c) => picked.has(c.id)).map((c) => ({ id: c.id, name: c.name }))
+          fromChats = await addContactsBulk(session.sessionId, category, items)
+          setContacts((list) => [...list, ...fromChats].sort((a, b) => a.name.localeCompare(b.name)))
+          setPicked(new Set())
+        }
+        const ids = [...new Set([...chosen.map((c) => c.id), ...fromChats.map((c) => c.id)])]
         const { shares } = await sendDirect(session.sessionId, intervention.id, ids, message)
         setSending(shares.filter((x) => x.status === 'envoi' && ids.includes(x.contact_id ?? '')))
         onSent()
@@ -307,7 +318,12 @@ function SendDialog({
                 </label>
               )}
               {inTab.map((c) => (
-                <div key={c.id} className="flex items-center gap-2.5 rounded-xl border border-border/60 px-3 py-2 text-sm">
+                <div
+                  key={c.id}
+                  className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 text-sm ${
+                    selected.has(c.id) ? 'border-primary/50 bg-primary/10' : 'border-border/60'
+                  }`}
+                >
                   <input
                     type="checkbox"
                     checked={selected.has(c.id)}
@@ -415,7 +431,12 @@ function SendDialog({
                             </p>
                           )}
                           {list.slice(0, 400).map((c) => (
-                            <label key={c.id} className="flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm hover:bg-secondary">
+                            <label
+                              key={c.id}
+                              className={`flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-sm ${
+                                picked.has(c.id) ? 'bg-primary/10 ring-1 ring-primary/40' : 'hover:bg-secondary'
+                              }`}
+                            >
                               <input
                                 type="checkbox"
                                 className="size-4 shrink-0"
@@ -441,8 +462,8 @@ function SendDialog({
                           ))}
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" onClick={addPicked} disabled={picked.size === 0}>
-                            <Plus className="size-4" /> Ajouter{picked.size > 0 ? ` (${picked.size})` : ''} au tableau {CATEGORY_LABEL[category]}
+                          <Button size="sm" variant="outline" onClick={addPicked} disabled={picked.size === 0}>
+                            <Plus className="size-4" /> Garder{picked.size > 0 ? ` (${picked.size})` : ''} dans le tableau {CATEGORY_LABEL[category]}
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => setChats(null)}>
                             Fermer
@@ -464,13 +485,13 @@ function SendDialog({
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
-            <DialogFooter>
+            <DialogFooter className="sticky bottom-0 -mx-1 bg-background/95 px-1 pt-2 backdrop-blur">
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Annuler
               </Button>
-              <Button onClick={send} disabled={busy || chosen.length === 0 || !message.trim()}>
+              <Button onClick={send} disabled={busy || recipientCount === 0 || !message.trim()}>
                 <Send className="size-4" />
-                Envoyer{chosen.length > 0 ? ` à ${chosen.length}` : ''}
+                Envoyer{recipientCount > 0 ? ` à ${recipientCount}` : ''}
               </Button>
             </DialogFooter>
           </div>
