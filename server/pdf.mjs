@@ -422,6 +422,34 @@ export function generateDocumentPdfBuffer(doc) {
 // Miroir serveur de downloadReportPdf (src/lib/pdf.ts) — même mise en page,
 // nécessaire pour joindre le rapport en PDF à un email (le téléchargement
 // client existant ne peut pas produire un buffer envoyable par le serveur).
+
+// Texte long du rapport : passe à la page suivante quand il le faut, et met en
+// gras les titres de section (« Travaux réalisés : » seul sur sa ligne).
+function writeReportText(pdf, text, x, startY, width) {
+  const pageHeight = pdf.internal.pageSize.getHeight()
+  let y = startY
+  for (const raw of text.split('\n')) {
+    const isTitle = /^[^-•\s].{1,60}:\s*$/.test(raw.trim())
+    if (!raw.trim()) {
+      y += 2.5
+      continue
+    }
+    pdf.setFont('helvetica', isTitle ? 'bold' : 'normal')
+    pdf.setFontSize(isTitle ? 9.5 : 9)
+    pdf.setTextColor(...(isTitle ? DARK : [60, 60, 65]))
+    if (isTitle) y += 2
+    for (const line of pdf.splitTextToSize(raw.trim(), width)) {
+      if (y > pageHeight - 24) {
+        pdf.addPage()
+        y = 20
+      }
+      pdf.text(line, x, y)
+      y += 4.6
+    }
+  }
+  return y
+}
+
 export function generateReportPdfBuffer({ report, intervention, technicienName }) {
   const company = getCompany(intervention.team_id)
   const pdf = new jsPDF()
@@ -443,8 +471,13 @@ export function generateReportPdfBuffer({ report, intervention, technicienName }
 
   const infoRows = [
     ['Référence', intervention.reference],
-    ['Date', fmtDate(eventDate)],
-    ['Heure', new Date(eventDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })],
+    ['Date', fmtDate(report.arrival_at ?? eventDate)],
+    ...(report.arrival_at
+      ? [["Heure d'arrivée", new Date(report.arrival_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })]]
+      : [['Heure', new Date(eventDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })]]),
+    ...(intervention.completed_at
+      ? [["Fin d'intervention", new Date(intervention.completed_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })]]
+      : []),
     ['Technicien', technicienName],
     ['Client', client],
     ['Adresse', intervention.address ?? '-'],
@@ -475,19 +508,18 @@ export function generateReportPdfBuffer({ report, intervention, technicienName }
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(10)
   pdf.setTextColor(...DARK)
-  pdf.text('Compte-rendu du technicien', margin, y)
-  y += 5
-  pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(9)
-  pdf.setTextColor(60, 60, 65)
-  const notesLines = pdf.splitTextToSize(report.notes?.trim() || 'Aucune remarque.', pageWidth - margin * 2)
-  pdf.text(notesLines, margin, y)
+  pdf.text("Compte-rendu de l'intervention", margin, y)
+  y += 6
+  writeReportText(pdf, report.notes?.trim() || 'Aucune remarque.', margin, y, pageWidth - margin * 2)
 
   const footerY = pdf.internal.pageSize.getHeight() - 14
-  pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(7)
-  pdf.setTextColor(...GRAY_TEXT)
-  pdf.text(legalFooterLines(company).join(' — '), pageWidth / 2, footerY, { align: 'center', maxWidth: pageWidth - margin * 2 })
+  for (let p = 1; p <= pdf.getNumberOfPages(); p++) {
+    pdf.setPage(p)
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(7)
+    pdf.setTextColor(...GRAY_TEXT)
+    pdf.text(legalFooterLines(company).join(' — '), pageWidth / 2, footerY, { align: 'center', maxWidth: pageWidth - margin * 2 })
+  }
 
   return Buffer.from(pdf.output('arraybuffer'))
 }

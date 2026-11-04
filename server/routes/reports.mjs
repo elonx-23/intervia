@@ -7,6 +7,7 @@ import { sendMail } from '../mailer.mjs'
 import { generateReportPdfBuffer } from '../pdf.mjs'
 import { wrapEmail } from '../emailTemplates.mjs'
 import { rateLimit } from '../rateLimit.mjs'
+import { draftReport } from '../aiReport.mjs'
 
 export const reportsRouter = Router()
 reportsRouter.use(requireAuth)
@@ -25,8 +26,47 @@ function canAccessIntervention(caller, intervention) {
   return intervention.technicien_id === caller.technicien_id
 }
 
+function technicienNameFor(intervention, caller) {
+  const t = intervention.technicien_id
+    ? db.prepare('SELECT first_name, last_name FROM technicians WHERE id = ?').get(intervention.technicien_id)
+    : caller.technicien_id
+      ? db.prepare('SELECT first_name, last_name FROM technicians WHERE id = ?').get(caller.technicien_id)
+      : null
+  return t ? `${t.first_name} ${t.last_name}`.trim() : 'Technicien'
+}
+
+const isoOrNull = (v) => {
+  const d = v ? new Date(v) : null
+  return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null
+}
+
+// Rédaction du compte-rendu par l'IA (fiche + heure d'arrivée + facture +
+// appel) — rien n'est enregistré : le texte revient dans le formulaire, à
+// relire et modifier avant de générer le rapport.
+const aiLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 40 })
+reportsRouter.post('/ai-draft', aiLimiter, async (req, res) => {
+  const intervention = db.prepare('SELECT * FROM interventions WHERE id = ?').get(req.body?.interventionId)
+  if (!canAccessIntervention(req.caller, intervention)) return res.status(404).json({ error: 'Intervention introuvable' })
+  try {
+    res.json(
+      await draftReport({
+        teamId: req.caller.team_id,
+        interventionId: intervention.id,
+        arrivalAt: isoOrNull(req.body?.arrivalAt),
+        technicienName: technicienNameFor(intervention, req.caller),
+        extraNotes: String(req.body?.notes ?? '').slice(0, 4000),
+      }),
+    )
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message })
+    console.log(`[rapport ia] ${e.message}`)
+    res.status(502).json({ error: 'La rédaction a échoué, réessaie dans un instant.' })
+  }
+})
+
 reportsRouter.post('/', (req, res) => {
   const { interventionId, notes } = req.body ?? {}
+  const arrivalAt = isoOrNull(req.body?.arrivalAt)
   const intervention = db.prepare('SELECT * FROM interventions WHERE id = ?').get(interventionId)
   if (!canAccessIntervention(req.caller, intervention)) {
     return res.status(404).json({ error: 'Intervention introuvable' })
@@ -35,8 +75,8 @@ reportsRouter.post('/', (req, res) => {
   const id = uuid()
   const createdAt = now()
   db.prepare(
-    'INSERT INTO intervention_reports (id, intervention_id, team_id, technicien_id, notes, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-  ).run(id, interventionId, req.caller.team_id, req.caller.technicien_id, notes ?? '', req.sessionId, createdAt)
+    'INSERT INTO intervention_reports (id, intervention_id, team_id, technicien_id, notes, arrival_at, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+  ).run(id, interventionId, req.caller.team_id, req.caller.technicien_id, notes ?? '', arrivalAt, req.sessionId, createdAt)
 
   res.json({ id, intervention_id: interventionId, team_id: req.caller.team_id, technicien_id: req.caller.technicien_id, notes: notes ?? '', created_at: createdAt })
 })

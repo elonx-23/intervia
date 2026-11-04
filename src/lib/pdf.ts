@@ -440,7 +440,38 @@ export interface ReportPdfInput {
   interventionType: string
   description: string | null
   eventDate: string
+  // Heure d'arrivée du technicien et fin d'intervention, si connues.
+  arrivalAt?: string | null
+  completedAt?: string | null
 }
+
+// Texte long du rapport : passe à la page suivante quand il le faut, et met en
+// gras les titres de section (« Travaux réalisés : » seul sur sa ligne).
+function writeReportText(pdf: jsPDF, text: string, x: number, startY: number, width: number) {
+  const pageHeight = pdf.internal.pageSize.getHeight()
+  let y = startY
+  for (const raw of text.split('\n')) {
+    const isTitle = /^[^-•\s].{1,60}:\s*$/.test(raw.trim())
+    if (!raw.trim()) {
+      y += 2.5
+      continue
+    }
+    pdf.setFont('helvetica', isTitle ? 'bold' : 'normal')
+    pdf.setFontSize(isTitle ? 9.5 : 9)
+    pdf.setTextColor(...(isTitle ? DARK : ([60, 60, 65] as [number, number, number])))
+    if (isTitle) y += 2
+    for (const line of pdf.splitTextToSize(raw.trim(), width) as string[]) {
+      if (y > pageHeight - 24) {
+        pdf.addPage()
+        y = 20
+      }
+      pdf.text(line, x, y)
+      y += 4.6
+    }
+  }
+  return y
+}
+
 
 // Rapport d'intervention : date/heure et description reprises de la fiche
 // elle-même (jamais ressaisies), plus le texte libre ajouté par le
@@ -468,8 +499,13 @@ export async function downloadReportPdf(technicienName: string, data: ReportPdfI
 
   const infoRows: [string, string][] = [
     ['Référence', data.reference],
-    ['Date', new Date(data.eventDate).toLocaleDateString('fr-FR')],
-    ['Heure', new Date(data.eventDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })],
+    ['Date', new Date(data.arrivalAt ?? data.eventDate).toLocaleDateString('fr-FR')],
+    ...(data.arrivalAt
+      ? ([["Heure d'arrivée", new Date(data.arrivalAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })]] as [string, string][])
+      : ([['Heure', new Date(data.eventDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })]] as [string, string][])),
+    ...(data.completedAt
+      ? ([["Fin d'intervention", new Date(data.completedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })]] as [string, string][])
+      : []),
     ['Technicien', technicienName],
     ['Client', client],
     ['Adresse', data.address ?? '-'],
@@ -500,19 +536,19 @@ export async function downloadReportPdf(technicienName: string, data: ReportPdfI
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(10)
   pdf.setTextColor(...DARK)
-  pdf.text('Compte-rendu du technicien', margin, y)
-  y += 5
-  pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(9)
-  pdf.setTextColor(60, 60, 65)
-  const notesLines = pdf.splitTextToSize(notes.trim() || 'Aucune remarque.', pageWidth - margin * 2)
-  pdf.text(notesLines, margin, y)
+  pdf.text("Compte-rendu de l'intervention", margin, y)
+  y += 6
+  writeReportText(pdf, notes.trim() || 'Aucune remarque.', margin, y, pageWidth - margin * 2)
 
+  // Pied de page légal sur chaque page.
   const footerY = pdf.internal.pageSize.getHeight() - 14
-  pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(7)
-  pdf.setTextColor(...GRAY_TEXT)
-  pdf.text(legalFooterLines().join(' — '), pageWidth / 2, footerY, { align: 'center', maxWidth: pageWidth - margin * 2 })
+  for (let p = 1; p <= pdf.getNumberOfPages(); p++) {
+    pdf.setPage(p)
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(7)
+    pdf.setTextColor(...GRAY_TEXT)
+    pdf.text(legalFooterLines().join(' — '), pageWidth / 2, footerY, { align: 'center', maxWidth: pageWidth - margin * 2 })
+  }
 
   pdf.save(`rapport-${data.reference}.pdf`)
 }

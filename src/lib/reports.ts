@@ -24,12 +24,24 @@ export interface InterventionReportListItem extends InterventionReport {
   i_completed_at: string | null
 }
 
-export async function createReport(sessionId: string, interventionId: string, notes: string) {
+export async function createReport(sessionId: string, interventionId: string, notes: string, arrivalAt?: string | null) {
   return apiFetch<InterventionReport>('/api/reports', {
     method: 'POST',
     sessionId,
-    body: { interventionId, notes },
+    body: { interventionId, notes, arrivalAt: arrivalAt ?? null },
   })
+}
+
+// Compte-rendu rédigé par l'IA (fiche + heure d'arrivée + facture + appel).
+export interface ReportDraft {
+  notes: string
+  motifs: string[]
+  arrivalAt: string | null
+  document: { kind: 'devis' | 'facture'; number: string } | null
+}
+
+export async function draftReportWithAi(sessionId: string, interventionId: string, arrivalAt: string | null, notes: string) {
+  return apiFetch<ReportDraft>('/api/reports/ai-draft', { method: 'POST', sessionId, body: { interventionId, arrivalAt, notes } })
 }
 
 export async function listReports(sessionId: string) {

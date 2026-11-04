@@ -335,12 +335,13 @@ export default function DevisEdit() {
     try {
       await sendDocumentEmail(session.sessionId, doc.id)
       setEmailSent(true)
-      // On bascule sur l'historique : l'envoi y apparaît, avec son suivi.
-      setTab('historique')
     } catch (e) {
       setError(friendlyError(e, "Erreur d'envoi."))
     } finally {
       setBusy(false)
+      // Dans tous les cas, on bascule sur l'historique : l'envoi y apparaît
+      // avec son suivi (envoyé, ouvert, cliqué) — ou la raison de l'échec.
+      setTab('historique')
     }
   }
 
