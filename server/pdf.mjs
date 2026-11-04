@@ -5,6 +5,7 @@ import autoTable from 'jspdf-autotable'
 
 import { companyForTeam, companyLegalLines } from './company.mjs'
 import { uploadsDir } from './routes/upload.mjs'
+import { renderDocumentPdf } from '../shared/documentPdf.mjs'
 
 // Miroir de src/lib/pdf.ts (design identique) mais côté serveur — utilisé
 // pour joindre le PDF en pièce jointe aux emails, pas seulement pour le
@@ -147,281 +148,21 @@ function drawLogo(pdf, x, y, logoDataUrl, initials) {
   pdf.text(initials || 'IN', x + 7, y + 8.5, { align: 'center' })
 }
 
+// Devis / facture en pièce jointe d'email : même modèle que l'app
+// (shared/documentPdf.mjs), avec les coordonnées de l'équipe émettrice.
 export function generateDocumentPdfBuffer(doc) {
   const company = getCompany(doc.team_id)
-  const pdf = new jsPDF()
-  const pageWidth = pdf.internal.pageSize.getWidth()
-  const margin = 14
-  const kindLabel = doc.kind === 'devis' ? 'Devis' : 'Facture'
-
-  drawLogo(pdf, margin, 14, readLogoDataUrl(company.logoUrl), companyInitials(company.name))
-  pdf.setTextColor(...DARK)
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(15)
-  pdf.text(company.name, margin + 18, 23)
-
-  const rightX = pageWidth - margin
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(10)
-  pdf.text(`${kindLabel} N° ${doc.number}`, rightX, 16, { align: 'right' })
-  pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(8.5)
-  pdf.setTextColor(...GRAY_TEXT)
-  pdf.text(`Réalisé${doc.kind === 'facture' ? 'e' : ''} le ${fmtDate(doc.issue_date)}`, rightX, 21.5, { align: 'right' })
-  if (doc.kind === 'devis' && doc.validity_date) {
-    pdf.text(`Validité : ${fmtDate(doc.validity_date)}`, rightX, 26.5, { align: 'right' })
-  }
-  if (doc.kind === 'facture' && doc.due_date) {
-    pdf.text(`Date échéance : ${fmtDate(doc.due_date)}`, rightX, 26.5, { align: 'right' })
-  }
-
-  let infoBottomY = 31
-
-  if (doc.kind === 'facture' && doc.status === 'payee') {
-    const boxW = 62
-    const boxX = rightX - boxW
-    const boxY = infoBottomY + 2
-    pdf.setFillColor(...RED_BG)
-    pdf.setDrawColor(...RED)
-    pdf.setLineWidth(0.4)
-    pdf.roundedRect(boxX, boxY, boxW, 14, 2, 2, 'FD')
-    pdf.setTextColor(...RED)
-    pdf.setFont('helvetica', 'bold')
-    pdf.setFontSize(8.5)
-    pdf.text('ACQUITTÉE', boxX + 4, boxY + 5.5)
-    pdf.setFont('helvetica', 'normal')
-    pdf.setFontSize(7)
-    const paidLine = `Facture payée le ${doc.paid_at ? fmtDate(doc.paid_at) : ''}${doc.payment_method ? ` par ${doc.payment_method.toLowerCase()}.` : '.'}`
-    const paidLines = pdf.splitTextToSize(paidLine, boxW - 8)
-    pdf.text(paidLines, boxX + 4, boxY + 9.5)
-    infoBottomY = boxY + 14
-  }
-
-  let y = Math.max(40, infoBottomY + 8)
-  pdf.setTextColor(...DARK)
-  pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(8.5)
-  const companyLines = [company.name, company.address, company.address && 'France', company.phone, company.email].filter(Boolean)
-  companyLines.forEach((line, i) => pdf.text(line, margin, y + i * 4.2))
-
-  pdf.setFont('helvetica', 'bold')
-  pdf.text('Adressé à :', rightX, y, { align: 'right' })
-  pdf.setFont('helvetica', 'normal')
-  const client = [doc.client_first_name, doc.client_last_name].filter(Boolean).join(' ') || '-'
-  const clientLines = [client, ...(doc.address ? [doc.address] : []), ...(doc.phone ? [doc.phone] : []), ...(doc.email ? [doc.email] : [])]
-  clientLines.forEach((line, i) => pdf.text(line, rightX, y + (i + 1) * 4.2, { align: 'right' }))
-
-  y += Math.max(companyLines.length, clientLines.length + 1) * 4.2 + 8
-
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(19)
-  pdf.text(kindLabel, margin, y)
-  y += 10
-
-  const groups = []
-  const services = doc.items.filter((i) => i.itemType === 'service')
-  const materiels = doc.items.filter((i) => i.itemType === 'materiel')
-  if (services.length) groups.push({ label: 'Service', items: services })
-  if (materiels.length) groups.push({ label: 'Matériel', items: materiels })
-  if (groups.length === 0) groups.push({ label: 'Désignation', items: [] })
-
-  let tableY = y
-  for (const group of groups) {
-    autoTable(pdf, {
-      startY: tableY,
-      margin: { left: margin, right: margin },
-      head: [[group.label, 'Qté.', 'PU HT', 'Total HT', 'TVA']],
-      body: group.items.map((i) => [
-        i.description ? `${i.label}\n${i.description}` : i.label,
-        String(i.quantity),
-        `${i.unitPrice.toFixed(2)} €`,
-        `${(i.quantity * i.unitPrice).toFixed(2)} €`,
-        `${doc.vat_rate} %`,
-      ]),
-      styles: { fontSize: 9, cellPadding: 3.2, textColor: DARK, lineColor: GRAY_LINE, lineWidth: 0.2 },
-      headStyles: { fillColor: ACCENT, textColor: DARK, fontStyle: 'bold', fontSize: 8.5 },
-      columnStyles: {
-        1: { halign: 'right', cellWidth: 16 },
-        2: { halign: 'right', cellWidth: 24 },
-        3: { halign: 'right', cellWidth: 26 },
-        4: { halign: 'right', cellWidth: 16 },
-      },
-      // Le nom de l'article et sa description partagent une même cellule —
-      // autotable ne sait pas mélanger gras/normal dans une seule chaîne,
-      // donc on efface son rendu par défaut et on redessine nous-mêmes.
-      didDrawCell: (data) => {
-        if (data.section !== 'body' || data.column.index !== 0) return
-        const item = group.items[data.row.index]
-        if (!item) return
-        const cell = data.cell
-        const fontSize = 9
-        const lh = lineHeightMm(fontSize)
-        const x = cell.x + cell.padding('left')
-        const maxWidth = cell.width - cell.padding('left') - cell.padding('right')
-
-        pdf.setFillColor(255, 255, 255)
-        pdf.rect(cell.x + 0.3, cell.y + 0.3, cell.width - 0.6, cell.height - 0.6, 'F')
-
-        let ly = cell.y + cell.padding('top') + lh * 0.78
-        pdf.setTextColor(...DARK)
-        pdf.setFont('helvetica', 'bold')
-        pdf.setFontSize(fontSize)
-        pdf.text(item.label, x, ly)
-        ly += lh
-
-        if (item.description) {
-          pdf.setFont('helvetica', 'normal')
-          for (const line of pdf.splitTextToSize(item.description, maxWidth)) {
-            pdf.text(line, x, ly)
-            ly += lh
-          }
-        }
-      },
-    })
-    tableY = pdf.lastAutoTable.finalY
-  }
-
-  const ht = itemsTotalHT(doc.items)
-  const remise = discountAmount(ht, doc.discount_type, doc.discount_value)
-  const ttc = Math.max(0, ht - remise) * (1 + doc.vat_rate / 100)
-  const vatAmount = ttc - (ht - remise)
-
-  const belowTableY = tableY + 8
-  const boxWidth = 78
-  const boxX = pageWidth - margin - boxWidth
-
-  autoTable(pdf, {
-    startY: belowTableY,
-    margin: { left: boxX },
-    tableWidth: boxWidth,
-    head: [['TVA', 'Base HT', 'Montant']],
-    body: [[`${doc.vat_rate} %`, `${(ht - remise).toFixed(2)} €`, `${vatAmount.toFixed(2)} €`]],
-    styles: { fontSize: 8.5, cellPadding: 2.6, textColor: DARK, lineColor: GRAY_LINE, lineWidth: 0.2 },
-    headStyles: { fillColor: ACCENT, textColor: DARK, fontStyle: 'bold', fontSize: 8 },
-    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
+  const pdf = renderDocumentPdf({
+    jsPDF,
+    autoTable,
+    doc,
+    company,
+    logoDataUrl: readLogoDataUrl(company.logoUrl),
+    clauses: legalClauses(company),
+    footerLines: legalFooterLines(company),
   })
-  const vatTableEndY = pdf.lastAutoTable.finalY
-
-  const totalsRows = [['Total HT', `${ht.toFixed(2)} €`]]
-  if (remise !== 0) {
-    const adj = remise > 0 ? 'Remise' : 'Majoration'
-    totalsRows.push([adj, `${remise > 0 ? '-' : '+'}${Math.abs(remise).toFixed(2)} €`])
-  }
-  totalsRows.push(['Total TVA', `${vatAmount.toFixed(2)} €`])
-  totalsRows.push([doc.kind === 'facture' ? 'Net à payer' : 'Total TTC', `${ttc.toFixed(2)} €`])
-
-  autoTable(pdf, {
-    startY: vatTableEndY + 4,
-    margin: { left: boxX },
-    tableWidth: boxWidth,
-    body: totalsRows,
-    styles: { fontSize: 8.5, cellPadding: 2.6, textColor: DARK, lineColor: GRAY_LINE, lineWidth: 0.2 },
-    columnStyles: { 1: { halign: 'right' } },
-    didParseCell: (data) => {
-      if (data.row.index === totalsRows.length - 1) {
-        data.cell.styles.fillColor = ACCENT
-        data.cell.styles.fontStyle = 'bold'
-      }
-    },
-  })
-  const totalsEndY = pdf.lastAutoTable.finalY
-
-  let leftY = belowTableY
-  pdf.setTextColor(...GRAY_TEXT)
-  pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(7.5)
-  const leftWidth = boxX - margin - 6
-  if (doc.vat_rate < 20) {
-    const note =
-      doc.kind === 'devis'
-        ? `En signant le présent ${kindLabel.toLowerCase()}, j'accepte expressément les conditions générales de vente situées à la suite de ce document. Je certifie que les conditions d'application du taux réduit de la TVA sont remplies en ce que les travaux sont effectués dans des locaux à usage d'habitation de plus de deux ans, ne répondent pas aux conditions d'exclusion prévues par les textes, sont affectés ou destinés à être affectés à l'habitation à l'issue des travaux et portent sur des travaux éligibles.`
-        : `Le client a attesté sur le devis signé que les conditions d'application de la TVA réduite sont remplies.`
-    const noteLines = pdf.splitTextToSize(note, leftWidth)
-    pdf.text(noteLines, margin, leftY)
-    leftY += noteLines.length * 3.6 + 6
-  }
-
-  if (doc.signature_data) {
-    try {
-      pdf.setFont('helvetica', 'bold')
-      pdf.setFontSize(8.5)
-      pdf.setTextColor(...DARK)
-      pdf.text('Signature du client', margin, leftY)
-      pdf.addImage(doc.signature_data, 'PNG', margin, leftY + 3, 50, 24)
-      leftY += 30
-    } catch {
-      // image invalide — le PDF reste utilisable sans la signature
-    }
-  }
-
-  let finalY = Math.max(leftY, totalsEndY) + 6
-
-  if (doc.notes) {
-    pdf.setFont('helvetica', 'bold')
-    pdf.setFontSize(8)
-    pdf.setTextColor(...GRAY_TEXT)
-    pdf.text('NOTES', margin, finalY)
-    pdf.setFont('helvetica', 'normal')
-    pdf.setFontSize(9)
-    pdf.setTextColor(60, 60, 65)
-    const noteLines = pdf.splitTextToSize(doc.notes, pageWidth - margin * 2)
-    pdf.text(noteLines, margin, finalY + 5)
-    finalY += 5 + noteLines.length * 4.5
-  }
-
-  const pageHeight = pdf.internal.pageSize.getHeight()
-  const footerReserve = 24
-  const ensureSpace = () => {
-    if (finalY > pageHeight - footerReserve) {
-      pdf.addPage()
-      finalY = 20
-    }
-  }
-
-  finalY += 10
-  ensureSpace()
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(10)
-  pdf.setTextColor(...DARK)
-  pdf.text('Conditions générales', margin, finalY)
-  finalY += 6
-
-  legalClauses(company).forEach((clause, idx) => {
-    ensureSpace()
-    pdf.setFont('helvetica', 'bold')
-    pdf.setFontSize(8.5)
-    pdf.setTextColor(...DARK)
-    pdf.text(`${idx + 1}. ${clause.title}`, margin, finalY)
-    finalY += 4.5
-
-    pdf.setFont('helvetica', 'normal')
-    pdf.setFontSize(8)
-    pdf.setTextColor(...GRAY_TEXT)
-    const bodyLines = pdf.splitTextToSize(clause.body, pageWidth - margin * 2)
-    for (const line of bodyLines) {
-      ensureSpace()
-      pdf.text(line, margin, finalY)
-      finalY += 4
-    }
-    finalY += 3
-  })
-
-  const pageCount = pdf.getNumberOfPages()
-  for (let p = 1; p <= pageCount; p++) {
-    pdf.setPage(p)
-    const footerY = pdf.internal.pageSize.getHeight() - 14
-    pdf.setFont('helvetica', 'normal')
-    pdf.setFontSize(7)
-    pdf.setTextColor(...GRAY_TEXT)
-    pdf.text(legalFooterLines(company).join(' — '), pageWidth / 2, footerY, { align: 'center', maxWidth: pageWidth - margin * 2 })
-  }
-
   return Buffer.from(pdf.output('arraybuffer'))
 }
-
-// Miroir serveur de downloadReportPdf (src/lib/pdf.ts) — même mise en page,
-// nécessaire pour joindre le rapport en PDF à un email (le téléchargement
-// client existant ne peut pas produire un buffer envoyable par le serveur).
 
 // Texte long du rapport : passe à la page suivante quand il le faut, et met en
 // gras les titres de section (« Travaux réalisés : » seul sur sa ligne).
