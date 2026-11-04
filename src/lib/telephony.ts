@@ -77,6 +77,7 @@ export interface NumberOrder {
   label: string
   number: string | null
   total: number | null
+  currency?: string
   actionUrl: string | null
   // L'admin a indiqué avoir payé lui-même via le lien.
   paidReported?: boolean
@@ -84,6 +85,8 @@ export interface NumberOrder {
 }
 
 export interface NumbersOverview {
+  // 'telnyx' : numéros achetés instantanément sur le compte d'Intervia.
+  provider?: 'ovh' | 'telnyx'
   configured: boolean
   account: 'none' | 'pending' | 'ready'
   // Ce qui manque avant de pouvoir acheter : 'phone' (aucun téléphone de renvoi), 'legal' (infos entreprise).
@@ -106,6 +109,10 @@ export interface AvailableNumber {
   number: string
   // Numéro « premium » : plus facile à retenir, mais plus cher.
   premium: boolean
+  // Prix connus dès la recherche chez l'opérateur « revendeur ».
+  monthly?: number
+  upfront?: number
+  currency?: string
 }
 
 export async function listAvailableNumbers(sessionId: string, zone: string) {

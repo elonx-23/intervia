@@ -3,6 +3,7 @@ import OpenAI from 'openai'
 import { createInterventionFromCall } from './callExtraction.mjs'
 import { db } from './db.mjs'
 import { broadcast } from './events.mjs'
+import { readLocalRecording } from './telnyx.mjs'
 
 // Appels dont la transcription est en cours dans CE processus — évite de
 // lancer deux fois Whisper (donc de payer deux fois) quand la synchro
@@ -18,6 +19,8 @@ const RETRY_WINDOW_MS = 15 * 60 * 1000
 // d'authentification à envoyer, la signature des appels API ne s'y applique
 // pas). Le format (mp3, wav…) est celui que renvoie OVH.
 export async function downloadRecording(url) {
+  // Enregistrement déjà copié sur le serveur (voir telnyx.mjs storeRecording).
+  if (String(url).startsWith('local:')) return readLocalRecording(url)
   const res = await fetch(url, { signal: AbortSignal.timeout(60000) })
   if (!res.ok) throw new Error(`Téléchargement de l'enregistrement échoué (${res.status})`)
   const contentType = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase()

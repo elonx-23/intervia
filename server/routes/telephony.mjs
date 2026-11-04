@@ -20,6 +20,14 @@ import {
   searchZones,
 } from '../telephonyNumbers.mjs'
 import { getSyncState, syncTeamCalls } from '../telephonySync.mjs'
+import { rememberPublicBaseUrl, telnyxEnabledFor, telnyxErrorMessage, TelnyxError } from '../telnyx.mjs'
+import {
+  availableNumbersTelnyx,
+  isTelnyxNumber,
+  orderNumberTelnyx,
+  quoteNumberTelnyx,
+  releaseNumberTelnyx,
+} from '../telnyxNumbers.mjs'
 import { downloadRecording, transcribeCallRecording } from '../transcription.mjs'
 
 export const telephonyRouter = Router()
@@ -30,7 +38,8 @@ telephonyRouter.use(requireAuth, requireAdmin)
 // Erreur renvoyée à l'écran : jamais de nom de fournisseur ni de détail technique.
 function fail(res, e) {
   if (!(e instanceof UserError)) console.log(`[telephonie] ${e?.message ?? e}`)
-  res.status(e instanceof UserError ? 400 : 502).json({ error: errorForScreen(e) })
+  const error = e instanceof TelnyxError ? telnyxErrorMessage(e) : errorForScreen(e)
+  res.status(e instanceof UserError ? 400 : 502).json({ error })
 }
 
 // Applique tout de suite un changement (téléphones, commande) au lieu
@@ -49,7 +58,7 @@ telephonyRouter.get('/status', (req, res) => {
   const teamId = req.caller.team_id
   const sync = getSyncState(teamId)
   res.json({
-    configured: isTelephonyConfigured(teamId),
+    configured: telnyxEnabledFor(teamId) || isTelephonyConfigured(teamId),
     hasOpenaiKey: Boolean(getTelephonyConfig(teamId).openaiApiKey),
     numbers: numbersOverview(teamId).numbers.map((n) => n.serviceName),
     lastSyncAt: sync.lastSyncAt,
@@ -160,7 +169,8 @@ telephonyRouter.get('/zones', async (req, res) => {
 
 telephonyRouter.get('/numbers/available', async (req, res) => {
   try {
-    res.json(await availableNumbers(String(req.query.zone ?? '').trim().slice(0, 60)))
+    const zone = String(req.query.zone ?? '').trim().slice(0, 60)
+    res.json(telnyxEnabledFor(req.caller.team_id) ? await availableNumbersTelnyx(zone) : await availableNumbers(zone))
   } catch (e) {
     fail(res, e)
   }
@@ -180,7 +190,9 @@ function choiceFrom(body) {
 // Prix exact avant achat : rien n'est commandé ici.
 telephonyRouter.post('/numbers/quote', async (req, res) => {
   try {
-    res.json(await quoteNumber(req.caller.team_id, choiceFrom(req.body)))
+    const teamId = req.caller.team_id
+    rememberPublicBaseUrl(req)
+    res.json(telnyxEnabledFor(teamId) ? await quoteNumberTelnyx(teamId, choiceFrom(req.body)) : await quoteNumber(teamId, choiceFrom(req.body)))
   } catch (e) {
     fail(res, e)
   }
@@ -190,7 +202,12 @@ telephonyRouter.post('/numbers/quote', async (req, res) => {
 // recontrôle avant de commander.
 telephonyRouter.post('/numbers/order', async (req, res) => {
   try {
-    const result = await orderNumber(req.caller.team_id, choiceFrom(req.body), Number(req.body?.expectedTotal))
+    const teamId = req.caller.team_id
+    rememberPublicBaseUrl(req)
+    const expected = Number(req.body?.expectedTotal)
+    const result = telnyxEnabledFor(teamId)
+      ? await orderNumberTelnyx(teamId, choiceFrom(req.body), expected)
+      : await orderNumber(teamId, choiceFrom(req.body), expected)
     syncSoon(req.caller.team_id)
     res.json(result)
   } catch (e) {
@@ -232,7 +249,9 @@ telephonyRouter.post('/numbers/:serviceName/configure', async (req, res) => {
 telephonyRouter.delete('/numbers/:serviceName', async (req, res) => {
   if (!SERVICE_NAME.test(req.params.serviceName)) return res.status(400).json({ error: 'Numéro invalide.' })
   try {
-    await releaseNumber(req.caller.team_id, req.params.serviceName)
+    const teamId = req.caller.team_id
+    if (isTelnyxNumber(teamId, req.params.serviceName)) await releaseNumberTelnyx(teamId, req.params.serviceName)
+    else await releaseNumber(teamId, req.params.serviceName)
     syncSoon(req.caller.team_id)
     res.json({ ok: true })
   } catch (e) {

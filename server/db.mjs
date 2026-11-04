@@ -314,6 +314,9 @@ ensureColumn('calls', 'intervention_id', 'TEXT')
 ensureColumn('calls', 'provider_call_id', 'TEXT')
 ensureColumn('telephony_orders', 'last_pay_attempt_at', 'TEXT')
 ensureColumn('telephony_orders', 'paid_reported_at', 'TEXT')
+ensureColumn('telephony_orders', 'provider', 'TEXT')
+ensureColumn('telephony_numbers', 'provider', 'TEXT')
+ensureColumn('telephony_numbers', 'provider_ref', 'TEXT')
 
 // Reprise de la base d'avant OVH : l'ancienne colonne d'identifiant d'appel
 // (et son index) du précédent fournisseur n'a plus d'usage.

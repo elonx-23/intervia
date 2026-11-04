@@ -3,6 +3,8 @@ import { broadcast } from './events.mjs'
 import { getTelephonyConfig, isTelephonyConfigured, operatorCredentials, operatorGet } from './ovh.mjs'
 import { toE164 } from './phone.mjs'
 import { errorForScreen, syncNumbers, syncOrders } from './telephonyNumbers.mjs'
+import { telnyxEnabledFor } from './telnyx.mjs'
+import { syncTelnyx } from './telnyxNumbers.mjs'
 import { transcribeCallRecording } from './transcription.mjs'
 
 // L'opérateur ne prévient pas l'app quand un appel se termine (pas de
@@ -83,7 +85,15 @@ async function importRecordings(teamId, c) {
 }
 
 export async function syncTeamCalls(teamId) {
-  if (!isTelephonyConfigured(teamId)) return { imported: 0 }
+  // Opérateur « revendeur » : les appels arrivent en direct par webhook, seules
+  // les commandes de numéros sont suivies ici.
+  if (telnyxEnabledFor(teamId)) {
+    await syncTelnyx(teamId).catch((e) => console.log(`[telephonie] suivi des commandes échoué (équipe ${teamId}) : ${e.message}`))
+  }
+  if (!isTelephonyConfigured(teamId)) {
+    startPendingTranscriptions(teamId)
+    return { imported: 0 }
+  }
   if (running.has(teamId)) return { imported: 0, busy: true }
   running.add(teamId)
 

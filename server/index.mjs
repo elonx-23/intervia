@@ -23,6 +23,7 @@ import { eventsRouter } from './routes/events.mjs'
 import { backupsRouter } from './routes/backups.mjs'
 import { reportsRouter } from './routes/reports.mjs'
 import { telephonyRouter } from './routes/telephony.mjs'
+import { telnyxWebhookRouter } from './routes/telnyxWebhooks.mjs'
 import { startCronJobs } from './cron.mjs'
 import { rateLimit } from './rateLimit.mjs'
 
@@ -63,6 +64,8 @@ app.use(rateLimit({ windowMs: 60 * 1000, max: 600 }))
 // Montée AVANT express.json() : Stripe a besoin du corps brut (non parsé)
 // pour vérifier la signature du webhook.
 app.use('/api/stripe/webhook', stripeWebhookRouter)
+// Webhooks d'appels de l'opérateur téléphonie : corps brut gardé pour la signature.
+app.use('/api/telnyx', telnyxWebhookRouter)
 app.use(express.json({ limit: '10mb' }))
 app.use('/uploads', express.static(uploadsDir))
 
