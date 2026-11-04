@@ -28,6 +28,7 @@ const EXTRACTION_SCHEMA = {
     'access_codes',
     'trade',
     'description',
+    'announced_price',
   ],
   properties: {
     summary: { type: 'string' },
@@ -41,6 +42,7 @@ const EXTRACTION_SCHEMA = {
     access_codes: nullableString,
     trade: { type: 'string', enum: TRADES },
     description: nullableString,
+    announced_price: { type: ['number', 'null'] },
   },
 }
 
@@ -56,7 +58,8 @@ const SYSTEM_PROMPT = `Tu analyses la transcription d'un appel téléphonique re
 - floor : l'étage tel que dit (ex. "3e étage", "rez-de-chaussée"), sinon null.
 - access_codes : tous les codes et infos d'accès dits (digicode, interphone, bâtiment, escalier, porte), regroupés en une ligne, sinon null.
 - trade : le corps de métier du problème. Porte claquée, serrure, clé, blindage, rideau métallique = Serrurerie. Fuite, canalisation, WC, chauffe-eau, débouchage = Plomberie. Panne de courant, disjoncteur, prise, tableau électrique = Électricité. Sinon Autre.
-- description : le problème en une ou deux phrases claires, à la troisième personne.`
+- description : le problème en une ou deux phrases claires, à la troisième personne.
+- announced_price : le prix annoncé au client pendant l'appel, en euros (nombre seul). Si une fourchette est annoncée, le montant le plus bas. Sinon null.`
 
 // Une ligne par point (« - … »), même si le modèle les a renvoyées collées.
 export function formatSummary(text) {
@@ -120,8 +123,8 @@ export function insertInterventionFromExtraction(call, extracted) {
   db.prepare(
     `INSERT INTO interventions
       (id, reference, client_first_name, client_last_name, phone, address, postal_code, city, floor, access_codes,
-       intervention_type, description, status, team_id, photos, reminder_count, created_by, created_at, source_call_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'en_attente', ?, '[]', 0, 'appel', ?, ?)`,
+       intervention_type, description, amount, status, team_id, photos, reminder_count, created_by, created_at, source_call_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'en_attente', ?, '[]', 0, 'appel', ?, ?)`,
   ).run(
     id,
     reference,
@@ -136,6 +139,7 @@ export function insertInterventionFromExtraction(call, extracted) {
     extracted.access_codes ?? null,
     trade,
     extracted.description ?? null,
+    typeof extracted.announced_price === 'number' && extracted.announced_price > 0 ? extracted.announced_price : null,
     call.team_id,
     now(),
     call.id,

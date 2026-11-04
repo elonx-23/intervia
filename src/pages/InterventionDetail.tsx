@@ -5,6 +5,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AddressField } from '@/components/AddressField'
 import { PhotoUploader } from '@/components/PhotoUploader'
 import { CallSummary } from '@/components/CallSummary'
+import { WhatsAppSendButton, WhatsAppShareStatus } from '@/components/WhatsAppShare'
+import { ficheText } from '@/lib/whatsapp'
 import { RecordingPlayer } from '@/components/RecordingPlayer'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -30,7 +32,6 @@ import {
 import { friendlyError } from '@/lib/errors'
 import {
   assignIntervention,
-  buildWhatsAppText,
   getIntervention,
   listTechnicians,
   STATUS_LABELS,
@@ -55,6 +56,7 @@ export default function InterventionDetail() {
   const [error, setError] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
+  const [shareKey, setShareKey] = React.useState(0)
   const [editing, setEditing] = React.useState(false)
   const [photosSaving, setPhotosSaving] = React.useState(false)
   const [form, setForm] = React.useState({
@@ -156,7 +158,7 @@ export default function InterventionDetail() {
 
   const copyWhatsApp = async () => {
     try {
-      await navigator.clipboard.writeText(buildWhatsAppText(intervention))
+      await navigator.clipboard.writeText(ficheText(intervention))
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {
@@ -288,6 +290,7 @@ export default function InterventionDetail() {
                 <FileText className="size-4" /> Devis
               </Button>
             )}
+            {isAdmin && <WhatsAppSendButton intervention={intervention} onSent={() => setShareKey((k) => k + 1)} />}
             {isAdmin && (
               <Button variant="ghost" size="sm" onClick={copyWhatsApp}>
                 {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
@@ -296,6 +299,8 @@ export default function InterventionDetail() {
             )}
           </div>
         </div>
+
+        {isAdmin && <WhatsAppShareStatus intervention={intervention} refreshKey={shareKey} />}
 
         {isAdmin && intervention.source_call_id && session && (
           <div className="flex flex-col gap-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3">

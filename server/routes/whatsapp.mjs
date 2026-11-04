@@ -1,0 +1,155 @@
+import { Router } from 'express'
+
+import { requireAdmin, requireAuth } from '../auth.mjs'
+import { db, now, uuid } from '../db.mjs'
+import { broadcast } from '../events.mjs'
+
+// Envoi des fiches sur WhatsApp à des contacts, classés en deux listes :
+// « 25 % » (techniciens) et « 50/50 » (partenaires). WhatsApp ne laisse pas
+// une app poster seule : l'app prépare le message et ouvre la conversation
+// de chaque contact, l'admin appuie sur Envoyer. Elle garde la trace de qui
+// a reçu la fiche, et de qui l'a finalement prise, à quel pourcentage.
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS whatsapp_contacts (
+    id TEXT PRIMARY KEY,
+    team_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    category TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_whatsapp_contacts_team ON whatsapp_contacts (team_id, category);
+
+  CREATE TABLE IF NOT EXISTS intervention_shares (
+    id TEXT PRIMARY KEY,
+    intervention_id TEXT NOT NULL,
+    team_id TEXT NOT NULL,
+    contact_id TEXT,
+    contact_name TEXT,
+    phone TEXT,
+    category TEXT NOT NULL,
+    sent_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_intervention_shares_i ON intervention_shares (intervention_id, sent_at);
+`)
+for (const sql of [
+  'ALTER TABLE interventions ADD COLUMN taken_by_contact_id TEXT',
+  'ALTER TABLE interventions ADD COLUMN taken_by_name TEXT',
+  'ALTER TABLE interventions ADD COLUMN share_percent REAL',
+]) {
+  try {
+    db.exec(sql)
+  } catch {
+    // colonne déjà là
+  }
+}
+
+export const whatsappRouter = Router()
+whatsappRouter.use(requireAuth, requireAdmin)
+
+const CATEGORIES = new Set(['25', '50'])
+// Part reversée à celui qui prend l'intervention.
+const PERCENT = { 25: 25, 50: 50 }
+
+function cleanPhone(raw) {
+  const digits = String(raw ?? '').replace(/[^\d+]/g, '')
+  if (/^0[1-9]\d{8}$/.test(digits)) return digits
+  if (/^\+33[1-9]\d{8}$/.test(digits)) return `0${digits.slice(3)}`
+  if (/^0033[1-9]\d{8}$/.test(digits)) return `0${digits.slice(4)}`
+  if (/^\+\d{8,15}$/.test(digits)) return digits
+  return null
+}
+
+function interventionOr404(req, res) {
+  const row = db.prepare('SELECT * FROM interventions WHERE id = ? AND team_id = ?').get(req.params.id, req.caller.team_id)
+  if (!row) res.status(404).json({ error: 'Intervention introuvable' })
+  return row
+}
+
+// ---------- Contacts ----------
+
+whatsappRouter.get('/contacts', (req, res) => {
+  res.json(db.prepare('SELECT id, name, phone, category FROM whatsapp_contacts WHERE team_id = ? ORDER BY name COLLATE NOCASE').all(req.caller.team_id))
+})
+
+whatsappRouter.post('/contacts', (req, res) => {
+  const name = String(req.body?.name ?? '').trim().slice(0, 80)
+  const phone = cleanPhone(req.body?.phone)
+  const category = String(req.body?.category ?? '')
+  if (!name) return res.status(400).json({ error: 'Indique un nom.' })
+  if (!phone) return res.status(400).json({ error: 'Numéro de téléphone invalide.' })
+  if (!CATEGORIES.has(category)) return res.status(400).json({ error: 'Liste invalide.' })
+  const id = uuid()
+  db.prepare('INSERT INTO whatsapp_contacts (id, team_id, name, phone, category, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+    id,
+    req.caller.team_id,
+    name,
+    phone,
+    category,
+    now(),
+  )
+  res.json({ id, name, phone, category })
+})
+
+whatsappRouter.delete('/contacts/:contactId', (req, res) => {
+  db.prepare('DELETE FROM whatsapp_contacts WHERE id = ? AND team_id = ?').run(req.params.contactId, req.caller.team_id)
+  res.json({ ok: true })
+})
+
+// ---------- Envois d'une fiche ----------
+
+function sharesOf(interventionId) {
+  return db
+    .prepare('SELECT id, contact_id, contact_name, phone, category, sent_at FROM intervention_shares WHERE intervention_id = ? ORDER BY sent_at DESC')
+    .all(interventionId)
+}
+
+whatsappRouter.get('/interventions/:id/shares', (req, res) => {
+  const row = interventionOr404(req, res)
+  if (!row) return
+  res.json({
+    shares: sharesOf(row.id),
+    takenBy: row.taken_by_name ? { contactId: row.taken_by_contact_id, name: row.taken_by_name, percent: row.share_percent } : null,
+  })
+})
+
+// Enregistre l'envoi de la fiche aux contacts choisis (l'ouverture de
+// WhatsApp se fait ensuite sur l'appareil de l'admin).
+whatsappRouter.post('/interventions/:id/shares', (req, res) => {
+  const row = interventionOr404(req, res)
+  if (!row) return
+  const ids = Array.isArray(req.body?.contactIds) ? req.body.contactIds.map(String).slice(0, 200) : []
+  if (ids.length === 0) return res.status(400).json({ error: 'Choisis au moins un contact.' })
+  const contacts = db
+    .prepare(`SELECT * FROM whatsapp_contacts WHERE team_id = ? AND id IN (${ids.map(() => '?').join(', ')})`)
+    .all(req.caller.team_id, ...ids)
+  const insert = db.prepare(
+    'INSERT INTO intervention_shares (id, intervention_id, team_id, contact_id, contact_name, phone, category, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+  )
+  for (const c of contacts) insert.run(uuid(), row.id, row.team_id, c.id, c.name, c.phone, c.category, now())
+  broadcast('interventions_changed', {}, row.team_id)
+  res.json({ shares: sharesOf(row.id), contacts })
+})
+
+// Qui a pris l'intervention, et à quel pourcentage (null = personne).
+whatsappRouter.post('/interventions/:id/taken', (req, res) => {
+  const row = interventionOr404(req, res)
+  if (!row) return
+  const contactId = req.body?.contactId ? String(req.body.contactId) : null
+  if (!contactId) {
+    db.prepare('UPDATE interventions SET taken_by_contact_id = NULL, taken_by_name = NULL, share_percent = NULL WHERE id = ?').run(row.id)
+  } else {
+    const c = db.prepare('SELECT * FROM whatsapp_contacts WHERE id = ? AND team_id = ?').get(contactId, req.caller.team_id)
+    if (!c) return res.status(404).json({ error: 'Contact introuvable' })
+    db.prepare('UPDATE interventions SET taken_by_contact_id = ?, taken_by_name = ?, share_percent = ? WHERE id = ?').run(
+      c.id,
+      c.name,
+      PERCENT[c.category],
+      row.id,
+    )
+  }
+  broadcast('interventions_changed', {}, row.team_id)
+  const updated = db.prepare('SELECT taken_by_contact_id, taken_by_name, share_percent FROM interventions WHERE id = ?').get(row.id)
+  res.json(updated.taken_by_name ? { contactId: updated.taken_by_contact_id, name: updated.taken_by_name, percent: updated.share_percent } : null)
+})

@@ -14,7 +14,6 @@ import { useAuth } from '@/lib/auth'
 import { useLiveEvents } from '@/hooks/useLiveEvents'
 import { friendlyError } from '@/lib/errors'
 import {
-  buildWhatsAppText,
   deleteIntervention,
   listInterventions,
   listTechnicians,
@@ -23,6 +22,7 @@ import {
   type InterventionStatus,
   type Technician,
 } from '@/lib/interventions'
+import { ficheText } from '@/lib/whatsapp'
 import { normalizeSearch } from '@/lib/utils'
 
 function matchesSearch(i: Intervention, query: string) {
@@ -129,7 +129,7 @@ export default function Interventions() {
 
   const copyWhatsApp = async (i: Intervention) => {
     try {
-      await navigator.clipboard.writeText(buildWhatsAppText(i))
+      await navigator.clipboard.writeText(ficheText(i))
       setCopiedId(i.id)
       setTimeout(() => setCopiedId((c) => (c === i.id ? null : c)), 1500)
     } catch {
