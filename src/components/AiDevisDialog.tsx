@@ -9,6 +9,7 @@ import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { createDevis, type DocumentItem } from '@/lib/documents'
 import { friendlyError } from '@/lib/errors'
+import { ITEM_CATALOG } from '@/lib/itemPresets'
 
 interface Draft {
   clientFirstName: string
@@ -49,7 +50,7 @@ export function AiDevisDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     setBusy(true)
     setError(null)
     try {
-      setDraft(await apiFetch<Draft>('/api/documents/ai-draft', { method: 'POST', sessionId: session.sessionId, body: { text } }))
+      setDraft(await apiFetch<Draft>('/api/documents/ai-draft', { method: 'POST', sessionId: session.sessionId, body: { text, catalog: ITEM_CATALOG.map(({ label, description }) => ({ label, description })) } }))
     } catch (e) {
       setError(friendlyError(e, 'La génération a échoué.'))
     } finally {

@@ -527,7 +527,7 @@ documentsRouter.get('/:id/converted-to', (req, res) => {
 // la route de création habituelle, une fois relu.
 documentsRouter.post('/ai-draft', requireAdmin, externalActionLimiter, async (req, res) => {
   try {
-    res.json(await draftDevisFromText(req.caller.team_id, req.body?.text))
+    res.json(await draftDevisFromText(req.caller.team_id, req.body?.text, req.body?.catalog))
   } catch (e) {
     if (e.status === 400) return res.status(400).json({ error: e.message })
     console.log(`[devis ia] ${e.message}`)
