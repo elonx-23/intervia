@@ -14,11 +14,8 @@ import { friendlyError } from '@/lib/errors'
 import {
   deleteIntervention,
   listInterventions,
-  listTechnicians,
   type Intervention,
-  type Technician,
 } from '@/lib/interventions'
-import { ficheText } from '@/lib/whatsapp'
 import { WorkOrderCard } from '@/components/WorkOrderCard'
 import { normalizeSearch } from '@/lib/utils'
 
@@ -45,9 +42,7 @@ export default function Interventions() {
   const isAdmin = session?.role === 'admin'
 
   const [interventions, setInterventions] = React.useState<Intervention[] | null>(null)
-  const [technicians, setTechnicians] = React.useState<Technician[]>([])
   const [error, setError] = React.useState<string | null>(null)
-  const [copiedId, setCopiedId] = React.useState<string | null>(null)
   const [searchOpen, setSearchOpen] = React.useState(false)
   const [search, setSearch] = React.useState('')
 
@@ -57,14 +52,8 @@ export default function Interventions() {
 
     async function load() {
       try {
-        const [list, techs] = await Promise.all([
-          listInterventions(session!.sessionId),
-          isAdmin ? listTechnicians(session!.sessionId) : Promise.resolve([]),
-        ])
-        if (!cancelled) {
-          setInterventions(list)
-          setTechnicians(techs)
-        }
+        const list = await listInterventions(session!.sessionId)
+        if (!cancelled) setInterventions(list)
       } catch (e) {
         if (!cancelled) setError(friendlyError(e, 'Erreur de chargement.'))
       }
@@ -81,14 +70,8 @@ export default function Interventions() {
   // (SSE), pas un sondage périodique. Pas de flash "Chargement…".
   const silentRefresh = React.useCallback(() => {
     if (!session) return
-    Promise.all([
-      listInterventions(session.sessionId),
-      isAdmin ? listTechnicians(session.sessionId) : Promise.resolve([]),
-    ])
-      .then(([list, techs]) => {
-        setInterventions(list)
-        setTechnicians(techs)
-      })
+    listInterventions(session.sessionId)
+      .then(setInterventions)
       .catch(() => {})
   }, [session, isAdmin])
   useLiveEvents(['interventions_changed', 'documents_changed'], silentRefresh)
@@ -104,26 +87,7 @@ export default function Interventions() {
     }
   }
 
-  const technicianName = React.useCallback(
-    (id: string | null) => {
-      if (!id) return null
-      const t = technicians.find((t) => t.id === id)
-      return t ? `${t.first_name} ${t.last_name}` : null
-    },
-    [technicians],
-  )
-
   const filtered = interventions?.filter((i) => matchesSearch(i, search)) ?? []
-
-  const copyWhatsApp = async (i: Intervention) => {
-    try {
-      await navigator.clipboard.writeText(ficheText(i))
-      setCopiedId(i.id)
-      setTimeout(() => setCopiedId((c) => (c === i.id ? null : c)), 1500)
-    } catch {
-      // clipboard indisponible (contexte non sécurisé, permissions…) — pas bloquant
-    }
-  }
 
   return (
     <Page title="Fiches d'intervention">
@@ -165,18 +129,11 @@ export default function Interventions() {
         )}
 
         <SwipeToDeleteGroup>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2.5">
             {filtered.map((i) => {
-              const tech = technicianName(i.technicien_id)
               return (
                 <SwipeToDelete key={i.id} id={i.id} onDelete={() => removeIntervention(i)} disabled={!isAdmin}>
-                  <WorkOrderCard
-                    intervention={i}
-                    technician={tech || null}
-                    showCopy={isAdmin}
-                    copied={copiedId === i.id}
-                    onCopy={() => copyWhatsApp(i)}
-                  />
+                  <WorkOrderCard intervention={i} />
                 </SwipeToDelete>
               )
             })}
