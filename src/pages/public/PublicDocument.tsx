@@ -1,6 +1,6 @@
 import { Download, Loader2, Signature } from 'lucide-react'
 import * as React from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 
 import { DocumentPdfViewer } from '@/components/DocumentPdfViewer'
 import { Loader } from '@/components/Loader'
@@ -17,6 +17,8 @@ import { friendlyError } from '@/lib/errors'
 // émettrice (renvoyées avec le document) apparaissent.
 export default function PublicDocument({ kind }: { kind: 'devis' | 'facture' }) {
   const { token } = useParams()
+  const [searchParams] = useSearchParams()
+  const fromEmail = searchParams.get('m')
   const [doc, setDoc] = React.useState<PseDocument | null>(null)
   const [companyName, setCompanyName] = React.useState('')
   const [error, setError] = React.useState<string | null>(null)
@@ -27,7 +29,7 @@ export default function PublicDocument({ kind }: { kind: 'devis' | 'facture' }) 
 
   React.useEffect(() => {
     if (!token) return
-    getDocumentByToken(token)
+    getDocumentByToken(token, fromEmail)
       .then((d: PublicDoc) => {
         // Avant de rendre le PDF : il lit ces coordonnées au moment du rendu.
         if (d.company) applyCompanySettings(d.company)
@@ -35,7 +37,7 @@ export default function PublicDocument({ kind }: { kind: 'devis' | 'facture' }) 
         setDoc(d)
       })
       .catch((e) => setError(friendlyError(e, `${label} introuvable.`)))
-  }, [token, label])
+  }, [token, label, fromEmail])
 
   React.useEffect(() => {
     if (!doc) return

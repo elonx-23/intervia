@@ -174,8 +174,9 @@ export async function listDocumentsByIntervention(sessionId: string, interventio
 // l'entreprise qui l'a émis (seules à apparaître sur la page et le PDF).
 export type PublicDocument = PseDocument & { company?: Partial<CompanySettings> }
 
-export async function getDocumentByToken(token: string) {
-  return apiFetch<PublicDocument>(`/api/documents/token/${token}`)
+// `fromEmail` : identifiant de l'envoi quand le client arrive depuis le bouton de l'email (suivi du clic).
+export async function getDocumentByToken(token: string, fromEmail?: string | null) {
+  return apiFetch<PublicDocument>(`/api/documents/token/${token}${fromEmail ? `?m=${encodeURIComponent(fromEmail)}` : ''}`)
 }
 
 export async function signDocumentPublic(token: string, signatureDataUrl: string) {
@@ -256,6 +257,24 @@ export async function listUnpaidDocuments(sessionId: string) {
 
 export async function sendDocumentEmail(sessionId: string, id: string) {
   await apiFetch(`/api/documents/${id}/email`, { method: 'POST', sessionId })
+}
+
+// Un email de devis/facture envoyé au client, avec son suivi.
+export interface DocumentEmail {
+  id: string
+  kind: 'envoi' | 'relance'
+  to_email: string | null
+  status: 'envoi_en_cours' | 'envoye' | 'echec'
+  error: string | null
+  sent_at: string
+  opened_at: string | null
+  open_count: number
+  clicked_at: string | null
+  click_count: number
+}
+
+export async function getDocumentEmails(sessionId: string, id: string) {
+  return apiFetch<DocumentEmail[]>(`/api/documents/${id}/emails`, { sessionId })
 }
 
 export async function uploadDocumentPhoto(file: File, folder: string, sessionId: string) {

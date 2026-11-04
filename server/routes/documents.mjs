@@ -6,6 +6,7 @@ import { notifyAdmin } from '../notify.mjs'
 import { sendMail } from '../mailer.mjs'
 import { generateDocumentPdfBuffer } from '../pdf.mjs'
 import { companyForTeam } from '../company.mjs'
+import { PIXEL_GIF, emailsForDocument, finishEmail, recordClick, recordOpen, startEmail, trackedLink, trackingPixel } from '../emailTracking.mjs'
 import { broadcast } from '../events.mjs'
 import { rateLimit } from '../rateLimit.mjs'
 import { wrapEmail, ctaButton, fallbackLink, fillEmailText, DEFAULT_EMAIL_TEXTS } from '../emailTemplates.mjs'
@@ -99,7 +100,7 @@ function escapeHtml(value) {
 // Email avec un vrai bouton d'action (pas juste un lien texte nu) — style
 // inline requis pour un rendu correct dans les clients mail (Gmail, Outlook…
 // n'appliquent pas de <style> externe).
-function emailHtml({ greeting, intro, ctaLabel, ctaLink, outro, brandName }) {
+function emailHtml({ greeting, intro, ctaLabel, ctaLink, outro, brandName, pixel }) {
   return wrapEmail({
     brandName: brandName ?? '',
     preheader: intro.replace(/<[^>]+>/g, ''),
@@ -108,7 +109,8 @@ function emailHtml({ greeting, intro, ctaLabel, ctaLink, outro, brandName }) {
       <p>${intro}</p>
       ${ctaButton(ctaLabel, ctaLink)}
       ${outro ? `<p>${outro}</p>` : ''}
-      ${fallbackLink(ctaLink)}`,
+      ${fallbackLink(ctaLink)}
+      ${pixel ?? ''}`,
   })
 }
 
@@ -126,9 +128,18 @@ function canAccess(caller, sessionId, doc) {
   return false
 }
 
+// Ouverture d'un email de devis/facture (image invisible, voir emailTracking.mjs).
+documentsRouter.get('/m/:id/o.gif', (req, res) => {
+  if (/^[0-9a-f-]{36}$/i.test(req.params.id)) recordOpen(req.params.id)
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  res.type('image/gif').send(PIXEL_GIF)
+})
+
 documentsRouter.get('/token/:token', (req, res) => {
   const row = db.prepare('SELECT * FROM documents WHERE public_token = ? AND deleted_at IS NULL').get(req.params.token)
   if (!row) return res.status(404).json({ error: 'Document introuvable' })
+  // Arrivée depuis le bouton de l'email : le client a bien cliqué.
+  if (typeof req.query.m === 'string') recordClick(row.id, req.query.m)
   // Coordonnées de l'entreprise émettrice, pour que le PDF affiché au client
   // soit exactement celui de l'entreprise (elles figurent de toute façon sur
   // le document) — sans elles, la page affichait des valeurs par défaut.
@@ -198,7 +209,9 @@ documentsRouter.post('/:id/relance', externalActionLimiter, async (req, res) => 
   if (doc.status !== 'emise') return res.status(400).json({ error: 'Cette facture est déjà payée' })
   if (!doc.email) return res.status(400).json({ error: "Le client n'a pas d'email renseigné" })
 
-  const link = `${req.protocol}://${req.get('host')}/facture/${doc.public_token}`
+  const baseUrl = `${req.protocol}://${req.get('host')}`
+  const emailId = startEmail(doc, 'relance')
+  const link = trackedLink(`${baseUrl}/facture/${doc.public_token}`, emailId)
   const ttc = totalTTC(doc).toFixed(2)
 
   try {
@@ -214,6 +227,7 @@ documentsRouter.post('/:id/relance', externalActionLimiter, async (req, res) => 
         ctaLabel: doc.signature_data ? 'Consulter la facture' : 'Consulter et signer la facture',
         ctaLink: link,
         outro: 'Merci de bien vouloir régulariser dans les meilleurs délais.',
+        pixel: trackingPixel(baseUrl, emailId),
       }),
       attachments: [{ filename: `${doc.number}.pdf`, content: pdfBuffer }],
     })
@@ -221,8 +235,10 @@ documentsRouter.post('/:id/relance', externalActionLimiter, async (req, res) => 
       now(),
       doc.id,
     )
+    finishEmail(emailId)
     res.json(toApi(db.prepare('SELECT * FROM documents WHERE id = ?').get(doc.id)))
   } catch (e) {
+    finishEmail(emailId, e)
     res.status(500).json({ error: e.message })
   }
 })
@@ -237,7 +253,9 @@ documentsRouter.post('/:id/email', externalActionLimiter, async (req, res) => {
   if (!doc.email) return res.status(400).json({ error: "Le client n'a pas d'email renseigné" })
 
   const path = doc.kind === 'devis' ? 'signer' : 'facture'
-  const link = `${req.protocol}://${req.get('host')}/${path}/${doc.public_token}`
+  const baseUrl = `${req.protocol}://${req.get('host')}`
+  const emailId = startEmail(doc, 'envoi')
+  const link = trackedLink(`${baseUrl}/${path}/${doc.public_token}`, emailId)
   const label = doc.kind === 'devis' ? 'devis' : 'facture'
   const ttc = totalTTC(doc).toFixed(2)
   const alreadySigned = !!doc.signature_data
@@ -277,13 +295,24 @@ documentsRouter.post('/:id/email', externalActionLimiter, async (req, res) => {
         intro: introText,
         ctaLabel,
         ctaLink: link,
+        pixel: trackingPixel(baseUrl, emailId),
       }),
       attachments: [{ filename: `${doc.number}.pdf`, content: pdfBuffer }],
     })
-    res.json({ ok: true })
+    finishEmail(emailId)
+    res.json({ ok: true, emailId })
   } catch (e) {
+    finishEmail(emailId, e)
     res.status(500).json({ error: e.message })
   }
+})
+
+// Emails envoyés pour ce document, avec ouverture / clic (onglet Historique).
+documentsRouter.get('/:id/emails', (req, res) => {
+  const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(req.params.id)
+  if (!doc) return res.status(404).json({ error: 'Document introuvable' })
+  if (!canAccess(req.caller, req.sessionId, doc)) return res.status(403).json({ error: 'Accès refusé' })
+  res.json(emailsForDocument(doc.id))
 })
 
 documentsRouter.get('/', (req, res) => {

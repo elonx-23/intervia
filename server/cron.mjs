@@ -1,3 +1,4 @@
+import { finishEmail, startEmail, trackedLink, trackingPixel } from './emailTracking.mjs'
 import { companyForTeam } from './company.mjs'
 import cron from 'node-cron'
 
@@ -87,7 +88,8 @@ async function runAutoRelances() {
     const items = JSON.parse(doc.items)
     const ht = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0)
     const ttc = (ht * (1 + doc.vat_rate / 100)).toFixed(2)
-    const link = `${PUBLIC_URL}/facture/${doc.public_token}`
+    const emailId = startEmail(doc, 'relance')
+    const link = trackedLink(`${PUBLIC_URL}/facture/${doc.public_token}`, emailId)
 
     try {
       const pdfBuffer = generateDocumentPdfBuffer({
@@ -108,10 +110,12 @@ async function runAutoRelances() {
             <p>Nous n'avons pas encore reçu le règlement de votre facture <strong>${doc.number}</strong> (${ttc} € TTC), jointe à cet email.</p>
             ${ctaButton(doc.signature_data ? 'Consulter la facture' : 'Consulter et signer la facture', link)}
             ${fallbackLink(link)}
-            <p>Merci de bien vouloir régulariser dans les meilleurs délais.</p>`,
+            <p>Merci de bien vouloir régulariser dans les meilleurs délais.</p>
+            ${trackingPixel(PUBLIC_URL, emailId)}`,
         }),
         attachments: [{ filename: `${doc.number}.pdf`, content: pdfBuffer }],
       })
+      finishEmail(emailId)
       db.prepare('UPDATE documents SET relance_count = relance_count + 1, last_relance_at = ? WHERE id = ?').run(
         now(),
         doc.id,
@@ -125,8 +129,9 @@ async function runAutoRelances() {
         `${doc.client_first_name} ${doc.client_last_name} — ${doc.number}`,
         { document_id: doc.id },
       )
-    } catch {
+    } catch (e) {
       // email non configuré ou erreur d'envoi — on retentera au prochain passage
+      finishEmail(emailId, e)
     }
   }
 }

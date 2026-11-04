@@ -1,13 +1,18 @@
-import { Check, FileText, Mail, PenLine, Receipt } from 'lucide-react'
+import { Check, FileText, Mail, MailOpen, MousePointerClick, PenLine, Receipt, TriangleAlert } from 'lucide-react'
+import * as React from 'react'
 import type { ComponentType, ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-import type { PseDocument } from '@/lib/documents'
+import { Badge } from '@/components/ui/badge'
+import { useLiveEvents } from '@/hooks/useLiveEvents'
+import { useAuth } from '@/lib/auth'
+import { getDocumentEmails, type DocumentEmail, type PseDocument } from '@/lib/documents'
 
 interface Event {
   icon: ComponentType<{ className?: string }>
   label: ReactNode
   date: string
+  detail?: ReactNode
 }
 
 function fmt(iso: string) {
@@ -18,7 +23,56 @@ function fmt(iso: string) {
 // horodatages déjà enregistrés (pas un vrai journal d'audit ligne à ligne,
 // mais suffisant pour retracer le parcours du devis/facture). `convertedFacture`
 // (uniquement pour un devis) affiche un lien direct vers la facture générée.
+// Suivi d'un email : reçu par la messagerie, ouvert, lien cliqué.
+function EmailTracking({ email }: { email: DocumentEmail }) {
+  if (email.status === 'echec') {
+    return <p className="text-xs text-destructive">Non envoyé : {email.error || 'erreur inconnue'}</p>
+  }
+  if (email.status === 'envoi_en_cours') return <p className="text-xs text-muted-foreground">Envoi en cours…</p>
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+      <Badge variant="outline" className="text-[10px]">
+        <Mail className="size-3" /> Envoyé
+      </Badge>
+      {email.opened_at ? (
+        <Badge variant="success" className="text-[10px]">
+          <MailOpen className="size-3" /> Ouvert{email.open_count > 1 ? ` ${email.open_count}×` : ''} · {fmt(email.opened_at)}
+        </Badge>
+      ) : (
+        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+          Pas encore ouvert
+        </Badge>
+      )}
+      {email.clicked_at ? (
+        <Badge variant="success" className="text-[10px]">
+          <MousePointerClick className="size-3" /> Lien cliqué{email.click_count > 1 ? ` ${email.click_count}×` : ''} · {fmt(email.clicked_at)}
+        </Badge>
+      ) : (
+        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+          Lien pas encore cliqué
+        </Badge>
+      )}
+    </div>
+  )
+}
+
 export function DocumentHistory({ doc, convertedFacture }: { doc: PseDocument; convertedFacture?: PseDocument | null }) {
+  const { session } = useAuth()
+  const [emails, setEmails] = React.useState<DocumentEmail[]>([])
+
+  const loadEmails = React.useCallback(() => {
+    if (!session) return
+    getDocumentEmails(session.sessionId, doc.id)
+      .then(setEmails)
+      .catch(() => {})
+  }, [session, doc.id])
+
+  React.useEffect(() => {
+    loadEmails()
+  }, [loadEmails])
+  // Ouverture / clic du client : l'historique se met à jour tout seul.
+  useLiveEvents(['documents_changed'], loadEmails)
+
   const events: Event[] = [
     { icon: FileText, label: `${doc.kind === 'devis' ? 'Devis' : 'Facture'} créé${doc.kind === 'facture' ? 'e' : ''}`, date: doc.created_at },
   ]
@@ -50,7 +104,17 @@ export function DocumentHistory({ doc, convertedFacture }: { doc: PseDocument; c
     })
   }
 
-  if (doc.last_relance_at) {
+  for (const email of emails) {
+    events.push({
+      icon: email.status === 'echec' ? TriangleAlert : Mail,
+      label: `${email.kind === 'relance' ? 'Relance envoyée' : 'Envoyé par email'}${email.to_email ? ` à ${email.to_email}` : ''}`,
+      date: email.sent_at,
+      detail: <EmailTracking email={email} />,
+    })
+  }
+
+  // Relances d'avant le suivi des emails (pas de ligne détaillée pour elles).
+  if (doc.last_relance_at && !emails.some((e) => e.kind === 'relance')) {
     events.push({
       icon: Mail,
       label: `Relance envoyée${doc.relance_count > 1 ? ` (${doc.relance_count}×)` : ''}`,
@@ -81,6 +145,7 @@ export function DocumentHistory({ doc, convertedFacture }: { doc: PseDocument; c
           <div className="pb-4">
             <p className="text-sm font-medium">{event.label}</p>
             <p className="text-xs text-muted-foreground">{fmt(event.date)}</p>
+            {event.detail}
           </div>
         </div>
       ))}
