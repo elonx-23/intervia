@@ -1,11 +1,9 @@
-import { Check, Copy, MapPin, Search, X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import * as React from 'react'
 import { Link } from 'react-router-dom'
 
 import { SwipeToDelete, SwipeToDeleteGroup } from '@/components/SwipeToDelete'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { EmptyState } from '@/components/layout/EmptyState'
 import { Loader } from '@/components/Loader'
@@ -17,13 +15,11 @@ import {
   deleteIntervention,
   listInterventions,
   listTechnicians,
-  STATUS_LABELS,
   type Intervention,
   type Technician,
 } from '@/lib/interventions'
 import { ficheText } from '@/lib/whatsapp'
-import { INTERVENTION_TONE, TONE_EDGE, TONE_ICON, friendlyDate } from '@/lib/tones'
-import { TradeIcon } from '@/components/TradeIcon'
+import { WorkOrderCard } from '@/components/WorkOrderCard'
 import { normalizeSearch } from '@/lib/utils'
 
 function matchesSearch(i: Intervention, query: string) {
@@ -171,67 +167,16 @@ export default function Interventions() {
         <SwipeToDeleteGroup>
           <div className="flex flex-col gap-3">
             {filtered.map((i) => {
-              const client = [i.client_first_name, i.client_last_name].filter(Boolean).join(' ')
               const tech = technicianName(i.technicien_id)
               return (
                 <SwipeToDelete key={i.id} id={i.id} onDelete={() => removeIntervention(i)} disabled={!isAdmin}>
-                  <Card className={`relative overflow-hidden py-4 before:absolute before:inset-y-0 before:left-0 before:w-1 ${TONE_EDGE[INTERVENTION_TONE[i.status]]}`}>
-                    <CardContent className="flex flex-col gap-2.5 pl-5">
-                      <Link to={`/interventions/${i.id}`} className="flex min-w-0 flex-col gap-2.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-medium text-muted-foreground">
-                            {i.reference} · {friendlyDate(i.created_at)}
-                          </span>
-                          <Badge variant={INTERVENTION_TONE[i.status]}>{STATUS_LABELS[i.status]}</Badge>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${TONE_ICON[INTERVENTION_TONE[i.status]]}`}>
-                            <TradeIcon trade={i.intervention_type} className="size-5" />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[15px] font-semibold">{client || 'Client sans nom'}</p>
-                            <p className="truncate text-sm text-muted-foreground">
-                              {[i.intervention_type || 'Type non précisé', i.city].filter(Boolean).join(' · ')}
-                            </p>
-                          </div>
-                          {i.amount != null && (
-                            <span className="shrink-0 text-[15px] font-bold">{String(i.amount).replace('.', ',')} €</span>
-                          )}
-                        </div>
-                        {i.address && (
-                          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                            <MapPin className="size-3.5 shrink-0" />
-                            <span className="truncate">{i.address}</span>
-                          </p>
-                        )}
-                      </Link>
-                      <div className="flex items-center justify-between gap-2 border-t border-border/70 pt-2.5 text-sm">
-                        <span className={tech ? 'flex min-w-0 items-center gap-2' : 'font-medium text-tone-amber-ink'}>
-                          {tech ? (
-                            <>
-                              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-bold">
-                                {tech
-                                  .split(' ')
-                                  .map((w) => w[0])
-                                  .join('')
-                                  .slice(0, 2)
-                                  .toUpperCase()}
-                              </span>
-                              <span className="truncate">{tech}</span>
-                            </>
-                          ) : (
-                            'Non assignée'
-                          )}
-                        </span>
-                        {isAdmin && (
-                          <Button variant="ghost" size="sm" className="h-8 shrink-0 text-muted-foreground" onClick={() => copyWhatsApp(i)}>
-                            {copiedId === i.id ? <Check className="size-4" /> : <Copy className="size-4" />}
-                            {copiedId === i.id ? 'Copié' : 'Copier'}
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <WorkOrderCard
+                    intervention={i}
+                    technician={tech || null}
+                    showCopy={isAdmin}
+                    copied={copiedId === i.id}
+                    onCopy={() => copyWhatsApp(i)}
+                  />
                 </SwipeToDelete>
               )
             })}

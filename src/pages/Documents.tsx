@@ -1,4 +1,4 @@
-import { ClipboardList, FileText, Receipt, Search, X } from 'lucide-react'
+import { ClipboardList, FileText, ReceiptEuro, Search, X } from 'lucide-react'
 import * as React from 'react'
 import { Link } from 'react-router-dom'
 
@@ -370,7 +370,7 @@ function DocumentRow({
       >
         <div className="flex min-w-0 items-center gap-3">
           <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${TONE_ICON[documentTone(d.kind, d.status)]}`}>
-            {d.kind === 'devis' ? <FileText className="size-[18px]" /> : <Receipt className="size-[18px]" />}
+            {d.kind === 'devis' ? <FileText className="size-[18px]" /> : <ReceiptEuro className="size-[18px]" />}
           </span>
           <div className="min-w-0">
             <p className="truncate text-[15px] font-semibold">{client || 'Client sans nom'}</p>

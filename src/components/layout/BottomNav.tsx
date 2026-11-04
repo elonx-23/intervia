@@ -1,4 +1,4 @@
-import { ClipboardList, FileText, LayoutDashboard, LineChart, Plus, Receipt, Sparkles, X } from 'lucide-react'
+import { ChartColumnBig, ClipboardList, FilePen, FileText, House, Plus, ReceiptEuro, Sparkles, Wrench, X } from 'lucide-react'
 import type { ComponentType } from 'react'
 import * as React from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
@@ -20,7 +20,7 @@ const FAB_BLUE = '#2563eb'
 interface NavItem {
   to: string
   label: string
-  icon: ComponentType<{ className?: string }>
+  icon: ComponentType<{ className?: string; strokeWidth?: number }>
   end?: boolean
 }
 
@@ -118,7 +118,11 @@ function NavGroup({ items, pathname }: { items: NavItem[]; pathname: string }) {
       )}
       {items.map(({ to, label, icon: Icon, end }) => (
         <NavPill key={to} to={to} end={end}>
-          <Icon className="size-5 transition-transform duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)]" />
+          {/* Icônes plus grandes et plus franches, trait plus épais pour l'onglet actif. */}
+          <Icon
+            className="size-[26px] transition-transform duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)]"
+            strokeWidth={activeIndex >= 0 && items[activeIndex]?.to === to ? 2.4 : 1.9}
+          />
           <span aria-hidden="true" className="whitespace-nowrap">
             {label}
           </span>
@@ -206,16 +210,16 @@ export function BottomNav() {
   const fab = useLiquidTouch<HTMLButtonElement>()
   const left: NavItem[] = isAdmin
     ? [
-        { to: '/', label: 'Accueil', icon: LayoutDashboard, end: true },
-        { to: '/interventions', label: 'Fiches', icon: ClipboardList },
+        { to: '/', label: 'Accueil', icon: House, end: true },
+        { to: '/interventions', label: 'Fiches', icon: Wrench },
       ]
     : [
-        { to: '/statistiques', label: 'Stats', icon: LineChart },
-        { to: '/', label: 'Fiches', icon: ClipboardList, end: true },
+        { to: '/statistiques', label: 'Stats', icon: ChartColumnBig },
+        { to: '/', label: 'Fiches', icon: Wrench, end: true },
       ]
   const right: NavItem[] = [
-    { to: '/devis', label: 'Devis', icon: FileText },
-    { to: '/factures', label: 'Factures', icon: Receipt },
+    { to: '/devis', label: 'Devis', icon: FilePen },
+    { to: '/factures', label: 'Factures', icon: ReceiptEuro },
   ]
 
   const newDevis = async () => {
@@ -268,7 +272,7 @@ export function BottomNav() {
     // Admin : devis préparé par l'IA à partir du message d'un technicien.
     ...(isAdmin ? [{ key: 'ia', label: 'Génération automatique', icon: Sparkles, onClick: () => setAiOpen(true), tone: 'violet' as const }] : []),
     { key: 'devis', label: 'Nouveau devis', icon: FileText, onClick: newDevis, tone: 'violet' },
-    { key: 'facture', label: 'Nouvelle facture', icon: Receipt, onClick: newFacture, tone: 'green' },
+    { key: 'facture', label: 'Nouvelle facture', icon: ReceiptEuro, onClick: newFacture, tone: 'green' },
     { key: 'rapport', label: "Rapport d'intervention", icon: ClipboardList, onClick: () => navigate('/rapports/nouveau'), tone: 'blue' },
   ]
 
