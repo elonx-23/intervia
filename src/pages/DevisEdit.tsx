@@ -47,6 +47,8 @@ import {
   pruneItems,
 } from '@/lib/documents'
 import { documentTone } from '@/lib/tones'
+import { InterventionContext } from '@/components/InterventionContext'
+import { formatEuro } from '@/lib/utils'
 import { friendlyError } from '@/lib/errors'
 
 export default function DevisEdit() {
@@ -377,6 +379,8 @@ export default function DevisEdit() {
         <div className="flex flex-col gap-4 pb-16">
           {tab === 'modifier' && (
             <>
+              {/* Admin : toutes les infos de la fiche d'origine, repliées. */}
+              {session?.role === 'admin' && doc.intervention_id && <InterventionContext interventionId={doc.intervention_id} />}
               <Card>
                 <CardContent className="flex items-start justify-between gap-2">
                   <div>
@@ -540,7 +544,7 @@ export default function DevisEdit() {
                           {item.label || 'Article sans nom'}
                         </span>
                         <span className="shrink-0 text-sm font-semibold tabular-nums">
-                          {(item.quantity * item.unitPrice).toFixed(2)} €
+                          {formatEuro(item.quantity * item.unitPrice)}
                         </span>
                       </button>
                     ),
@@ -554,7 +558,7 @@ export default function DevisEdit() {
                   </button>
                   <div className="flex items-center justify-between border-t border-border/70 pt-3 font-semibold">
                     <span>Sous-total</span>
-                    <span>{ht.toFixed(2)} €</span>
+                    <span>{formatEuro(ht)}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -634,11 +638,11 @@ export default function DevisEdit() {
                     </div>
                     <div className="flex items-center justify-between">
                       <span>Taxe ({form.vatRate}%)</span>
-                      <span>{(ttc - (ht - remise)).toFixed(2)} €</span>
+                      <span>{formatEuro(ttc - (ht - remise))}</span>
                     </div>
                     <div className="mt-1 flex items-center justify-between border-t border-border/70 pt-3">
                       <span className="text-base font-semibold">Total</span>
-                      <span className="text-2xl font-bold text-primary tabular-nums">{ttc.toFixed(2)} €</span>
+                      <span className="text-2xl font-bold text-primary tabular-nums">{formatEuro(ttc)}</span>
                     </div>
                   </div>
                 </CardContent>

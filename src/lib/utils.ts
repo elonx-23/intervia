@@ -20,3 +20,8 @@ export function normalizeSearch(s: string) {
 export function isoLocalDate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+
+// Montant au format français : « 1 471,00 € ».
+export function formatEuro(n: number) {
+  return `${n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+}
