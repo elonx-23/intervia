@@ -1,4 +1,3 @@
-import { pushoverNotifyAdmin } from './pushoverNotify.mjs'
 import { finishEmail, startEmail, trackedLink, trackingPixel } from './emailTracking.mjs'
 import { companyForTeam } from './company.mjs'
 import cron from 'node-cron'
@@ -28,7 +27,6 @@ function insertNotification(role, technicienId, teamId, type, title, body, data 
   db.prepare(
     'INSERT INTO notifications (id, recipient_role, recipient_technicien_id, team_id, type, title, body, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
   ).run(uuid(), role, technicienId, teamId, type, title, body, JSON.stringify(data), now())
-  if (role === 'admin') pushoverNotifyAdmin(teamId, type, title, body, data)
 }
 
 function runIntervationReminders() {
