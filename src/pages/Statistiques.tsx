@@ -24,6 +24,7 @@ import {
   type TechnicienBreakdown,
   type TechnicienStats,
 } from '@/lib/statistiques'
+import { useLiveEvents } from '@/hooks/useLiveEvents'
 import { totalTTC, type PseDocument } from '@/lib/documents'
 
 function startOfMonth() {
@@ -178,6 +179,14 @@ export default function Statistiques() {
 
   React.useEffect(() => {
     load()
+  }, [load])
+
+  // Temps réel : chiffres recalculés dès qu'une fiche, un devis ou une facture
+  // change, et une fois par minute.
+  useLiveEvents(['interventions_changed', 'documents_changed'], load)
+  React.useEffect(() => {
+    const t = setInterval(() => document.visibilityState === 'visible' && load(), 60000)
+    return () => clearInterval(t)
   }, [load])
 
   const downloadReleve = async () => {

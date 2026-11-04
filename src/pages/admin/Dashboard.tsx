@@ -39,6 +39,7 @@ import { friendlyError } from '@/lib/errors'
 import { broadcastUrgentNotification } from '@/lib/notifications'
 import { getAdminStats, getAdminTimeseries, type AdminStats, type CaPoint } from '@/lib/statistiques'
 import { TONE_ICON } from '@/lib/tones'
+import { useLiveEvents } from '@/hooks/useLiveEvents'
 import { isoLocalDate } from '@/lib/utils'
 
 const DEFAULT_MESSAGE =
@@ -123,19 +124,39 @@ export default function Dashboard() {
     }
   }, [periodIndex])
 
+  // Chiffres du tableau de bord. `silent` : mise à jour en arrière-plan (sans
+  // vider l'écran) quand une fiche, un devis ou une facture change.
+  const loadStats = React.useCallback(
+    (silent: boolean) => {
+      if (!session) return
+      const days = PERIODS.find((p) => p.key === period)!.days
+      const { from, to } = rangeFor(days)
+      if (!silent) {
+        setStats(null)
+        setSeries(null)
+      }
+      Promise.all([getAdminStats(session.sessionId, from, to), getAdminTimeseries(session.sessionId, from, to)])
+        .then(([s, ts]) => {
+          setStats(s)
+          setSeries(ts)
+          setError(null)
+        })
+        .catch((e) => !silent && setError(friendlyError(e, 'Erreur de chargement.')))
+    },
+    [session, period],
+  )
+
   React.useEffect(() => {
-    if (!session) return
-    const days = PERIODS.find((p) => p.key === period)!.days
-    const { from, to } = rangeFor(days)
-    setStats(null)
-    setSeries(null)
-    Promise.all([getAdminStats(session.sessionId, from, to), getAdminTimeseries(session.sessionId, from, to)])
-      .then(([s, ts]) => {
-        setStats(s)
-        setSeries(ts)
-      })
-      .catch((e) => setError(friendlyError(e, 'Erreur de chargement.')))
-  }, [session, period])
+    loadStats(false)
+  }, [loadStats])
+
+  // Temps réel : dès qu'une fiche, un devis ou une facture change (sur
+  // n'importe quel appareil), et une fois par minute pour suivre l'heure.
+  useLiveEvents(['interventions_changed', 'documents_changed'], () => loadStats(true))
+  React.useEffect(() => {
+    const t = setInterval(() => document.visibilityState === 'visible' && loadStats(true), 60000)
+    return () => clearInterval(t)
+  }, [loadStats])
 
   const sendUrgent = async () => {
     if (!session) return
