@@ -152,3 +152,21 @@ export const recordShares = (sessionId: string, interventionId: string, contactI
 
 export const setTakenBy = (sessionId: string, interventionId: string, contactId: string | null) =>
   apiFetch<TakenBy | null>(`/api/whatsapp/interventions/${interventionId}/taken`, { method: 'POST', sessionId, body: { contactId } })
+
+// Favoris : contacts et groupes affichés en premier (étoile).
+export interface WhatsAppFavorite {
+  id: string
+  name: string | null
+  kind: 'contact' | 'groupe'
+}
+
+export const listFavorites = (sessionId: string) => apiFetch<WhatsAppFavorite[]>('/api/whatsapp/favorites', { sessionId })
+
+export const addFavorite = (sessionId: string, fav: WhatsAppFavorite) =>
+  apiFetch<{ ok: true }>(`/api/whatsapp/favorites/${encodeURIComponent(fav.id)}`, { method: 'PUT', sessionId, body: { name: fav.name, kind: fav.kind } })
+
+export const removeFavorite = (sessionId: string, id: string) =>
+  apiFetch<{ ok: true }>(`/api/whatsapp/favorites/${encodeURIComponent(id)}`, { method: 'DELETE', sessionId })
+
+export const updateContact = (sessionId: string, id: string, patch: { category?: ShareCategory; name?: string }) =>
+  apiFetch<WhatsAppContact | { merged: true }>(`/api/whatsapp/contacts/${id}`, { method: 'PATCH', sessionId, body: patch })

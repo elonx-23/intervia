@@ -33,6 +33,18 @@ db.exec(`
     sent_at TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_intervention_shares_i ON intervention_shares (intervention_id, sent_at);
+
+  -- Discussions WhatsApp (contacts ou groupes) mises en favori, affichées en
+  -- premier. chat_id = même identifiant que le téléphone d'un contact du
+  -- tableau (numéro, ou identifiant de groupe …@g.us).
+  CREATE TABLE IF NOT EXISTS whatsapp_favorites (
+    team_id TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
+    name TEXT,
+    kind TEXT,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (team_id, chat_id)
+  );
 `)
 for (const sql of [
   'ALTER TABLE interventions ADD COLUMN taken_by_contact_id TEXT',
@@ -134,6 +146,27 @@ whatsappRouter.get('/groups', async (req, res) => {
   }
 })
 
+// ---------- Favoris ----------
+
+whatsappRouter.get('/favorites', (req, res) => {
+  res.json(db.prepare('SELECT chat_id AS id, name, kind FROM whatsapp_favorites WHERE team_id = ? ORDER BY name COLLATE NOCASE').all(req.caller.team_id))
+})
+
+whatsappRouter.put('/favorites/:chatId', (req, res) => {
+  const id = String(req.params.chatId).slice(0, 120)
+  if (!cleanPhone(id)) return res.status(400).json({ error: 'Discussion invalide.' })
+  db.prepare(
+    `INSERT INTO whatsapp_favorites (team_id, chat_id, name, kind, created_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(team_id, chat_id) DO UPDATE SET name = excluded.name, kind = excluded.kind`,
+  ).run(req.caller.team_id, id, String(req.body?.name ?? '').slice(0, 80) || null, req.body?.kind === 'groupe' ? 'groupe' : 'contact', now())
+  res.json({ ok: true })
+})
+
+whatsappRouter.delete('/favorites/:chatId', (req, res) => {
+  db.prepare('DELETE FROM whatsapp_favorites WHERE team_id = ? AND chat_id = ?').run(req.caller.team_id, String(req.params.chatId))
+  res.json({ ok: true })
+})
+
 // ---------- Contacts ----------
 
 whatsappRouter.get('/contacts', (req, res) => {
@@ -157,6 +190,26 @@ whatsappRouter.post('/contacts', (req, res) => {
     now(),
   )
   res.json({ id, name, phone, category })
+})
+
+// Passe un contact d'une liste à l'autre (25 % ↔ 50/50) ou le renomme.
+whatsappRouter.patch('/contacts/:contactId', (req, res) => {
+  const c = db.prepare('SELECT * FROM whatsapp_contacts WHERE id = ? AND team_id = ?').get(req.params.contactId, req.caller.team_id)
+  if (!c) return res.status(404).json({ error: 'Contact introuvable' })
+  const category = req.body?.category !== undefined ? String(req.body.category) : c.category
+  const name = req.body?.name !== undefined ? String(req.body.name).trim().slice(0, 80) : c.name
+  if (!CATEGORIES.has(category)) return res.status(400).json({ error: 'Liste invalide.' })
+  if (!name) return res.status(400).json({ error: 'Indique un nom.' })
+  const duplicate = db
+    .prepare('SELECT 1 FROM whatsapp_contacts WHERE team_id = ? AND phone = ? AND category = ? AND id != ?')
+    .get(req.caller.team_id, c.phone, category, c.id)
+  if (duplicate) {
+    // Déjà dans l'autre liste : on retire simplement celui-ci.
+    db.prepare('DELETE FROM whatsapp_contacts WHERE id = ?').run(c.id)
+    return res.json({ merged: true })
+  }
+  db.prepare('UPDATE whatsapp_contacts SET category = ?, name = ? WHERE id = ?').run(category, name, c.id)
+  res.json({ id: c.id, name, phone: c.phone, category })
 })
 
 whatsappRouter.delete('/contacts/:contactId', (req, res) => {

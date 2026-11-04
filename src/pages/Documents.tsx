@@ -222,7 +222,7 @@ export function Documents({ kind }: { kind: DocumentKind }) {
                       { value: 'toutes', label: 'Toutes' },
                       {
                         value: 'non_payees',
-                        label: 'Non payées',
+                        label: 'À payer',
                         activeBg: 'bg-amber-500/12',
                         activeText: 'text-amber-600 dark:text-amber-400',
                       },
@@ -366,7 +366,7 @@ function DocumentRow({
     <SwipeToDelete id={d.id} onDelete={onDelete} className="rounded-none">
       <Link
         to={`/${d.kind === 'devis' ? 'devis' : 'factures'}/${d.id}/modifier`}
-        className={`liquid flex items-center justify-between gap-3 border-b border-border/60 bg-card px-3 py-3 last:border-b-0 ${alt ? '' : ''}`}
+        className={`liquid flex min-h-[4.25rem] items-center justify-between gap-3 border-b border-border/50 px-3 py-3 last:border-b-0 ${alt ? 'bg-secondary dark:bg-secondary/70' : 'bg-card'}`}
       >
         <div className="flex min-w-0 items-center gap-3">
           <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${TONE_ICON[documentTone(d.kind, d.status)]}`}>
