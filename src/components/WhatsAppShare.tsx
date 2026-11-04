@@ -212,7 +212,7 @@ function SendDialog({
           setPicked(new Set())
         }
         const ids = [...new Set([...chosen.map((c) => c.id), ...fromChats.map((c) => c.id)])]
-        const { shares } = await sendDirect(session.sessionId, intervention.id, ids, message)
+        const { shares } = await sendDirect(session.sessionId, intervention.id, ids, message, mode)
         setSending(shares.filter((x) => x.status === 'envoi' && ids.includes(x.contact_id ?? '')))
         onSent()
         return
@@ -221,6 +221,7 @@ function SendDialog({
         session.sessionId,
         intervention.id,
         chosen.map((c) => c.id),
+        mode,
       )
       setQueue(chosen)
       onSent()
@@ -660,13 +661,14 @@ export function WhatsAppShareStatus({ intervention, refreshKey }: { intervention
     if (wa?.status === 'connecte') {
       setFicheSent('envoi')
       try {
-        await sendDirect(session.sessionId, intervention.id, [takenBy.contactId], ficheText(intervention))
+        await sendDirect(session.sessionId, intervention.id, [takenBy.contactId], ficheText(intervention), 'fiche')
         setFicheSent('ok')
       } catch (e) {
         setFicheSent(friendlyError(e, "Erreur d'envoi."))
       }
     } else if (recipient?.phone && !isGroup(recipient.phone)) {
       window.open(whatsappLink(recipient.phone, ficheText(intervention)), '_blank')
+      recordShares(session.sessionId, intervention.id, [takenBy.contactId], 'fiche').catch(() => {})
       setFicheSent('ok')
     }
   }

@@ -103,11 +103,18 @@ export const connectSession = (sessionId: string) => apiFetch<WhatsAppSession>('
 export const logoutSession = (sessionId: string) => apiFetch<WhatsAppSession>('/api/whatsapp/session/logout', { method: 'POST', sessionId })
 export const listGroups = (sessionId: string) => apiFetch<WhatsAppGroup[]>('/api/whatsapp/groups', { sessionId })
 
-export const sendDirect = (sessionId: string, interventionId: string, contactIds: string[], message: string) =>
+// mode : 'proposition' (code court) ou 'fiche' (fiche complète) — sert au classement des fiches.
+export const sendDirect = (
+  sessionId: string,
+  interventionId: string,
+  contactIds: string[],
+  message: string,
+  mode: 'proposition' | 'fiche' = 'proposition',
+) =>
   apiFetch<{ shares: InterventionShare[] }>(`/api/whatsapp/interventions/${interventionId}/send`, {
     method: 'POST',
     sessionId,
-    body: { contactIds, message },
+    body: { contactIds, message, mode },
   })
 
 export const isGroup = (phone: string) => phone.endsWith('@g.us')
@@ -143,11 +150,11 @@ export const deleteContact = (sessionId: string, id: string) =>
 export const getShares = (sessionId: string, interventionId: string) =>
   apiFetch<{ shares: InterventionShare[]; takenBy: TakenBy | null }>(`/api/whatsapp/interventions/${interventionId}/shares`, { sessionId })
 
-export const recordShares = (sessionId: string, interventionId: string, contactIds: string[]) =>
+export const recordShares = (sessionId: string, interventionId: string, contactIds: string[], mode: 'proposition' | 'fiche' = 'proposition') =>
   apiFetch<{ shares: InterventionShare[]; contacts: WhatsAppContact[] }>(`/api/whatsapp/interventions/${interventionId}/shares`, {
     method: 'POST',
     sessionId,
-    body: { contactIds },
+    body: { contactIds, mode },
   })
 
 export const setTakenBy = (sessionId: string, interventionId: string, contactId: string | null) =>

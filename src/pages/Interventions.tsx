@@ -15,6 +15,7 @@ import {
   deleteIntervention,
   listInterventions,
   type Intervention,
+  type InterventionStage,
 } from '@/lib/interventions'
 import { WorkOrderCard } from '@/components/WorkOrderCard'
 import { normalizeSearch } from '@/lib/utils'
@@ -87,7 +88,32 @@ export default function Interventions() {
     }
   }
 
-  const filtered = interventions?.filter((i) => matchesSearch(i, search)) ?? []
+  // Onglets : classement calculé par le serveur (voir withStages côté serveur).
+  const [tab, setTab] = React.useState<'toutes' | InterventionStage>(() => {
+    try {
+      return (localStorage.getItem('pse_fiches_tab') as 'toutes' | InterventionStage) || 'toutes'
+    } catch {
+      return 'toutes'
+    }
+  })
+  const chooseTab = (t: 'toutes' | InterventionStage) => {
+    setTab(t)
+    try {
+      localStorage.setItem('pse_fiches_tab', t)
+    } catch {
+      // stockage indisponible : pas grave
+    }
+  }
+  const searched = interventions?.filter((i) => matchesSearch(i, search)) ?? []
+  const count = (t: InterventionStage) => searched.filter((i) => i.stage === t).length
+  const filtered = tab === 'toutes' ? searched : searched.filter((i) => i.stage === tab)
+  const TABS: Array<{ value: 'toutes' | InterventionStage; label: string }> = [
+    { value: 'toutes', label: `Toutes (${searched.length})` },
+    { value: 'a_envoyer', label: `À envoyer (${count('a_envoyer')})` },
+    { value: 'envoyee', label: `Envoyées (${count('envoyee')})` },
+    { value: 'en_cours', label: `En cours (${count('en_cours')})` },
+    { value: 'terminee', label: `Terminées (${count('terminee')})` },
+  ]
 
   return (
     <Page title="Fiches d'intervention">
@@ -98,7 +124,22 @@ export default function Interventions() {
           </Button>
         )}
 
-        <div className="flex items-center justify-end">
+        <div className="flex items-center gap-2">
+          {/* Onglets en pastilles qui défilent, avec le nombre de fiches. */}
+          <div className="-mx-1 flex min-w-0 flex-1 gap-2 overflow-x-auto px-1 py-0.5">
+            {TABS.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => chooseTab(t.value)}
+                className={`h-9 shrink-0 rounded-full px-3.5 text-sm font-semibold whitespace-nowrap transition-colors ${
+                  tab === t.value ? 'bg-foreground text-background' : 'bg-secondary text-secondary-foreground'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             onClick={() => setSearchOpen((o) => !o)}
@@ -125,7 +166,19 @@ export default function Interventions() {
         )}
 
         {interventions !== null && filtered.length === 0 && (
-          <EmptyState label="Aucune intervention" />
+          <EmptyState
+            label={
+              tab === 'a_envoyer'
+                ? 'Aucune fiche à envoyer'
+                : tab === 'envoyee'
+                  ? 'Aucune fiche envoyée en attente'
+                  : tab === 'en_cours'
+                    ? 'Aucune fiche en cours'
+                    : tab === 'terminee'
+                      ? 'Aucune fiche terminée'
+                      : 'Aucune intervention'
+            }
+          />
         )}
 
         <SwipeToDeleteGroup>

@@ -19,7 +19,11 @@ export const STATUS_LABELS: Record<InterventionStatus, string> = {
   facturee: 'Facturée',
 }
 
+// Classement de la fiche (onglets de la liste), calculé par le serveur.
+export type InterventionStage = 'a_envoyer' | 'envoyee' | 'en_cours' | 'terminee'
+
 export interface Intervention {
+  stage?: InterventionStage
   id: string
   reference: string
   client_first_name: string

@@ -52,6 +52,8 @@ for (const sql of [
   'ALTER TABLE interventions ADD COLUMN share_percent REAL',
   'ALTER TABLE intervention_shares ADD COLUMN status TEXT',
   'ALTER TABLE intervention_shares ADD COLUMN error TEXT',
+  // 'proposition' (code court aux listes) ou 'fiche' (fiche complète envoyée).
+  'ALTER TABLE intervention_shares ADD COLUMN mode TEXT',
 ]) {
   try {
     db.exec(sql)
@@ -245,9 +247,11 @@ whatsappRouter.post('/interventions/:id/shares', (req, res) => {
     .prepare(`SELECT * FROM whatsapp_contacts WHERE team_id = ? AND id IN (${ids.map(() => '?').join(', ')})`)
     .all(req.caller.team_id, ...ids)
   const insert = db.prepare(
-    'INSERT INTO intervention_shares (id, intervention_id, team_id, contact_id, contact_name, phone, category, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO intervention_shares (id, intervention_id, team_id, contact_id, contact_name, phone, category, mode, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
   )
-  for (const c of contacts) insert.run(uuid(), row.id, row.team_id, c.id, c.name, c.phone, c.category, now())
+  const mode = req.body?.mode === 'fiche' ? 'fiche' : 'proposition'
+  for (const c of contacts) insert.run(uuid(), row.id, row.team_id, c.id, c.name, c.phone, c.category, mode, now())
+  broadcast('interventions_changed', {}, row.team_id)
   broadcast('interventions_changed', {}, row.team_id)
   res.json({ shares: sharesOf(row.id), contacts })
 })
@@ -269,11 +273,12 @@ whatsappRouter.post('/interventions/:id/send', (req, res) => {
     .all(teamId, ...ids)
 
   const insert = db.prepare(
-    "INSERT INTO intervention_shares (id, intervention_id, team_id, contact_id, contact_name, phone, category, status, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'envoi', ?)",
+    "INSERT INTO intervention_shares (id, intervention_id, team_id, contact_id, contact_name, phone, category, mode, status, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'envoi', ?)",
   )
+  const mode = req.body?.mode === 'fiche' ? 'fiche' : 'proposition'
   const targets = contacts.map((c) => {
     const shareId = uuid()
-    insert.run(shareId, row.id, teamId, c.id, c.name, c.phone, c.category, now())
+    insert.run(shareId, row.id, teamId, c.id, c.name, c.phone, c.category, mode, now())
     return { ...c, shareId }
   })
   broadcast('interventions_changed', {}, teamId)

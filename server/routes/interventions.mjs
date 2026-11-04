@@ -36,6 +36,57 @@ function toApi(row) {
   return { ...row, photos: JSON.parse(row.photos) }
 }
 
+// Classement des fiches (onglets de la liste) :
+//   terminee  : une facture existe au nom du client (rattachée à la fiche, ou
+//               même téléphone / même nom, émise après la fiche) ;
+//   en_cours  : un devis a été commencé à partir de la fiche ;
+//   envoyee   : fiche complète envoyée sur WhatsApp, ou technicien attribué ;
+//   a_envoyer : rien de tout ça encore.
+const digits = (v) => String(v ?? '').replace(/\D/g, '').replace(/^33/, '0')
+const fullName = (f, l) => `${f ?? ''} ${l ?? ''}`.trim().toLowerCase().replace(/\s+/g, ' ')
+
+function withStages(teamId, rows) {
+  const fiche = new Set(
+    db
+      .prepare("SELECT DISTINCT intervention_id AS id FROM intervention_shares WHERE team_id = ? AND mode = 'fiche'")
+      .all(teamId)
+      .map((r) => r.id),
+  )
+  const devis = new Set(
+    db
+      .prepare("SELECT DISTINCT intervention_id AS id FROM documents WHERE team_id = ? AND kind = 'devis' AND deleted_at IS NULL AND intervention_id IS NOT NULL")
+      .all(teamId)
+      .map((r) => r.id),
+  )
+  const factures = db
+    .prepare(
+      "SELECT intervention_id, client_first_name, client_last_name, phone, created_at FROM documents WHERE team_id = ? AND kind = 'facture' AND deleted_at IS NULL",
+    )
+    .all(teamId)
+  const byIntervention = new Set(factures.map((f) => f.intervention_id).filter(Boolean))
+
+  return rows.map((i) => {
+    const phone = digits(i.phone)
+    const name = fullName(i.client_first_name, i.client_last_name)
+    const billed =
+      i.status === 'facturee' ||
+      byIntervention.has(i.id) ||
+      factures.some(
+        (f) =>
+          f.created_at >= i.created_at &&
+          ((phone.length >= 9 && digits(f.phone) === phone) || (name.length > 2 && fullName(f.client_first_name, f.client_last_name) === name)),
+      )
+    const stage = billed
+      ? 'terminee'
+      : devis.has(i.id)
+        ? 'en_cours'
+        : fiche.has(i.id) || i.technicien_id || i.taken_by_contact_id
+          ? 'envoyee'
+          : 'a_envoyer'
+    return { ...i, stage }
+  })
+}
+
 interventionsRouter.get('/', (req, res) => {
   const rows =
     req.caller.role === 'admin'
@@ -43,7 +94,7 @@ interventionsRouter.get('/', (req, res) => {
       : db
           .prepare('SELECT * FROM interventions WHERE team_id = ? AND technicien_id = ? ORDER BY created_at DESC')
           .all(req.caller.team_id, req.caller.technicien_id)
-  res.json(rows.map(toApi))
+  res.json(withStages(req.caller.team_id, rows).map(toApi))
 })
 
 interventionsRouter.get('/:id', (req, res) => {
