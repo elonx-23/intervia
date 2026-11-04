@@ -13,12 +13,16 @@ const API_BASE = process.env.OVH_API_BASE || 'https://eu.api.ovh.com/1.0'
 // Un seul réglage JSON par équipe : accès à l'opérateur, clé de transcription,
 // téléphones de renvoi, informations légales, option d'enregistrement. Les
 // clés d'accès (operator*, openaiApiKey) ne sont jamais renvoyées au navigateur.
+// La clé de transcription d'Intervia (OPENAI_API_KEY, côté serveur) passe
+// avant celle d'une équipe : c'est le compte d'Intervia qui paie.
 export function getTelephonyConfig(teamId) {
-  return getSetting('telephony', teamId) ?? {}
+  const config = getSetting('telephony', teamId) ?? {}
+  return process.env.OPENAI_API_KEY ? { ...config, openaiApiKey: process.env.OPENAI_API_KEY } : config
 }
 
 export function updateTelephonyConfig(teamId, patch) {
-  const next = { ...getTelephonyConfig(teamId) }
+  // Réglages enregistrés tels quels (sans la clé serveur ajoutée à la lecture).
+  const next = { ...(getSetting('telephony', teamId) ?? {}) }
   for (const [key, value] of Object.entries(patch)) {
     if (value !== undefined) next[key] = value
   }

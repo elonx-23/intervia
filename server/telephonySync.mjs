@@ -136,6 +136,13 @@ function startPendingTranscriptions(teamId) {
     // sur « en cours » : on le remet en file d'attente (aucune transcription
     // ne peut tourner juste après un démarrage).
     db.prepare("UPDATE calls SET transcription_status = NULL WHERE transcription_status = 'en_attente'").run()
+    // Échecs des 3 derniers jours (ex. crédit de transcription épuisé à ce
+    // moment-là) : une nouvelle tentative à chaque redémarrage.
+    db.prepare(
+      `UPDATE calls SET transcription_status = NULL
+       WHERE transcription_status = 'erreur' AND transcription IS NULL AND recording_url IS NOT NULL
+         AND started_at > datetime('now', '-3 days')`,
+    ).run()
     recoveredAfterRestart = true
   }
   const { openaiApiKey } = getTelephonyConfig(teamId)
