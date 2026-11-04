@@ -3,6 +3,7 @@ import { Router } from 'express'
 import { requireAdmin, requireAuth } from '../auth.mjs'
 import { db, now, uuid } from '../db.mjs'
 import { broadcast } from '../events.mjs'
+import { connect, listGroups, logout, sendQueued, sessionStatus } from '../whatsappSession.mjs'
 
 // Envoi des fiches sur WhatsApp à des contacts, classés en deux listes :
 // « 25 % » (techniciens) et « 50/50 » (partenaires). WhatsApp ne laisse pas
@@ -37,6 +38,8 @@ for (const sql of [
   'ALTER TABLE interventions ADD COLUMN taken_by_contact_id TEXT',
   'ALTER TABLE interventions ADD COLUMN taken_by_name TEXT',
   'ALTER TABLE interventions ADD COLUMN share_percent REAL',
+  'ALTER TABLE intervention_shares ADD COLUMN status TEXT',
+  'ALTER TABLE intervention_shares ADD COLUMN error TEXT',
 ]) {
   try {
     db.exec(sql)
@@ -53,6 +56,8 @@ const CATEGORIES = new Set(['25', '50'])
 const PERCENT = { 25: 25, 50: 50 }
 
 function cleanPhone(raw) {
+  // Groupe WhatsApp (choisi dans la liste des groupes du WhatsApp relié).
+  if (/^[\d-]+@g\.us$/.test(String(raw ?? '').trim())) return String(raw).trim()
   const digits = String(raw ?? '').replace(/[^\d+]/g, '')
   if (/^0[1-9]\d{8}$/.test(digits)) return digits
   if (/^\+33[1-9]\d{8}$/.test(digits)) return `0${digits.slice(3)}`
@@ -66,6 +71,32 @@ function interventionOr404(req, res) {
   if (!row) res.status(404).json({ error: 'Intervention introuvable' })
   return row
 }
+
+// ---------- WhatsApp relié (QR code) ----------
+
+whatsappRouter.get('/session', (req, res) => res.json(sessionStatus(req.caller.team_id)))
+
+whatsappRouter.post('/session/connect', async (req, res) => {
+  try {
+    res.json(await connect(req.caller.team_id))
+  } catch (e) {
+    console.log(`[whatsapp] connexion impossible : ${e.message}`)
+    res.status(502).json({ error: 'Impossible de démarrer la connexion WhatsApp, réessaie.' })
+  }
+})
+
+whatsappRouter.post('/session/logout', async (req, res) => {
+  await logout(req.caller.team_id)
+  res.json(sessionStatus(req.caller.team_id))
+})
+
+whatsappRouter.get('/groups', async (req, res) => {
+  try {
+    res.json(await listGroups(req.caller.team_id))
+  } catch (e) {
+    res.status(e.status ?? 502).json({ error: e.status ? e.message : 'Impossible de lire tes groupes WhatsApp.' })
+  }
+})
 
 // ---------- Contacts ----------
 
@@ -101,7 +132,7 @@ whatsappRouter.delete('/contacts/:contactId', (req, res) => {
 
 function sharesOf(interventionId) {
   return db
-    .prepare('SELECT id, contact_id, contact_name, phone, category, sent_at FROM intervention_shares WHERE intervention_id = ? ORDER BY sent_at DESC')
+    .prepare('SELECT id, contact_id, contact_name, phone, category, status, error, sent_at FROM intervention_shares WHERE intervention_id = ? ORDER BY sent_at DESC')
     .all(interventionId)
 }
 
@@ -130,6 +161,50 @@ whatsappRouter.post('/interventions/:id/shares', (req, res) => {
   for (const c of contacts) insert.run(uuid(), row.id, row.team_id, c.id, c.name, c.phone, c.category, now())
   broadcast('interventions_changed', {}, row.team_id)
   res.json({ shares: sharesOf(row.id), contacts })
+})
+
+// Envoi DIRECT depuis le WhatsApp relié : la réponse revient tout de suite,
+// les messages partent ensuite un par un (espacés) et chaque ligne passe à
+// « envoyé » ou « échec » en direct.
+whatsappRouter.post('/interventions/:id/send', (req, res) => {
+  const row = interventionOr404(req, res)
+  if (!row) return
+  const teamId = req.caller.team_id
+  if (sessionStatus(teamId).status !== 'connecte') return res.status(400).json({ error: "Relie d'abord ton WhatsApp à l'app." })
+  const text = String(req.body?.message ?? '').trim().slice(0, 1000)
+  if (!text) return res.status(400).json({ error: 'Le message est vide.' })
+  const ids = Array.isArray(req.body?.contactIds) ? req.body.contactIds.map(String).slice(0, 100) : []
+  if (ids.length === 0) return res.status(400).json({ error: 'Choisis au moins un contact.' })
+  const contacts = db
+    .prepare(`SELECT * FROM whatsapp_contacts WHERE team_id = ? AND id IN (${ids.map(() => '?').join(', ')})`)
+    .all(teamId, ...ids)
+
+  const insert = db.prepare(
+    "INSERT INTO intervention_shares (id, intervention_id, team_id, contact_id, contact_name, phone, category, status, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'envoi', ?)",
+  )
+  const targets = contacts.map((c) => {
+    const shareId = uuid()
+    insert.run(shareId, row.id, teamId, c.id, c.name, c.phone, c.category, now())
+    return { ...c, shareId }
+  })
+  broadcast('interventions_changed', {}, teamId)
+  res.json({ shares: sharesOf(row.id) })
+
+  sendQueued(teamId, targets, text, (target, error) => {
+    db.prepare('UPDATE intervention_shares SET status = ?, error = ?, sent_at = ? WHERE id = ?').run(
+      error ? 'echec' : 'envoye',
+      error ? String(error.message).slice(0, 200) : null,
+      now(),
+      target.shareId,
+    )
+    broadcast('interventions_changed', {}, teamId)
+  }).catch((e) => {
+    db.prepare("UPDATE intervention_shares SET status = 'echec', error = ? WHERE intervention_id = ? AND status = 'envoi'").run(
+      String(e.message).slice(0, 200),
+      row.id,
+    )
+    broadcast('interventions_changed', {}, teamId)
+  })
 })
 
 // Qui a pris l'intervention, et à quel pourcentage (null = personne).

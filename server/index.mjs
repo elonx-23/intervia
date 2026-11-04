@@ -24,6 +24,7 @@ import { backupsRouter } from './routes/backups.mjs'
 import { reportsRouter } from './routes/reports.mjs'
 import { telephonyRouter } from './routes/telephony.mjs'
 import { whatsappRouter } from './routes/whatsapp.mjs'
+import { restoreSessions } from './whatsappSession.mjs'
 import { telnyxWebhookRouter } from './routes/telnyxWebhooks.mjs'
 import { startCronJobs } from './cron.mjs'
 import { rateLimit } from './rateLimit.mjs'
@@ -135,6 +136,8 @@ app.use((err, req, res, _next) => {
 })
 
 startCronJobs()
+// Reprend les WhatsApp déjà reliés (sessions gardées sur le volume).
+restoreSessions()
 
 const PORT = process.env.PORT ?? 3001
 app.listen(PORT, () => {

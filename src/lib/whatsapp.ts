@@ -16,7 +16,22 @@ export interface InterventionShare {
   contact_name: string | null
   phone: string | null
   category: ShareCategory
+  // Envoi direct depuis le WhatsApp relié : 'envoi' (en file), 'envoye', 'echec'. null = lien WhatsApp ouvert à la main.
+  status: 'envoi' | 'envoye' | 'echec' | null
+  error: string | null
   sent_at: string
+}
+
+export interface WhatsAppSession {
+  status: 'deconnecte' | 'connexion' | 'qr' | 'connecte'
+  qr: string | null
+  me: { number: string; name: string | null } | null
+}
+
+export interface WhatsAppGroup {
+  id: string
+  name: string
+  size: number
 }
 
 export interface TakenBy {
@@ -81,6 +96,20 @@ export function whatsappLink(phone: string, text: string) {
 }
 
 // ---------- API ----------
+
+export const getSession = (sessionId: string) => apiFetch<WhatsAppSession>('/api/whatsapp/session', { sessionId })
+export const connectSession = (sessionId: string) => apiFetch<WhatsAppSession>('/api/whatsapp/session/connect', { method: 'POST', sessionId })
+export const logoutSession = (sessionId: string) => apiFetch<WhatsAppSession>('/api/whatsapp/session/logout', { method: 'POST', sessionId })
+export const listGroups = (sessionId: string) => apiFetch<WhatsAppGroup[]>('/api/whatsapp/groups', { sessionId })
+
+export const sendDirect = (sessionId: string, interventionId: string, contactIds: string[], message: string) =>
+  apiFetch<{ shares: InterventionShare[] }>(`/api/whatsapp/interventions/${interventionId}/send`, {
+    method: 'POST',
+    sessionId,
+    body: { contactIds, message },
+  })
+
+export const isGroup = (phone: string) => phone.endsWith('@g.us')
 
 export const listContacts = (sessionId: string) => apiFetch<WhatsAppContact[]>('/api/whatsapp/contacts', { sessionId })
 

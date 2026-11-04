@@ -1,4 +1,4 @@
-import { Check, MessageCircle, Plus, Send, Trash2, UserCheck } from 'lucide-react'
+import { Check, Loader2, MessageCircle, Plus, Send, Trash2, UserCheck, Users, X } from 'lucide-react'
 import * as React from 'react'
 
 import { Badge } from '@/components/ui/badge'
@@ -7,6 +7,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { CenteredDialogContent, Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { useWhatsAppSession } from '@/components/WhatsAppConnection'
+import { useLiveEvents } from '@/hooks/useLiveEvents'
 import { useAuth } from '@/lib/auth'
 import { friendlyError } from '@/lib/errors'
 import type { Intervention } from '@/lib/interventions'
@@ -15,7 +17,10 @@ import {
   addContact,
   deleteContact,
   getShares,
+  isGroup,
   listContacts,
+  listGroups,
+  sendDirect,
   recordShares,
   setTakenBy,
   shortCode,
@@ -24,6 +29,7 @@ import {
   type ShareCategory,
   type TakenBy,
   type WhatsAppContact,
+  type WhatsAppGroup,
 } from '@/lib/whatsapp'
 
 // ---------- Fenêtre d'envoi ----------
@@ -53,10 +59,17 @@ function SendDialog({
   const [busy, setBusy] = React.useState(false)
   const [queue, setQueue] = React.useState<WhatsAppContact[] | null>(null)
   const [opened, setOpened] = React.useState<Set<string>>(new Set())
+  const { wa } = useWhatsAppSession()
+  const direct = wa?.status === 'connecte'
+  const [groups, setGroups] = React.useState<WhatsAppGroup[] | null>(null)
+  // Envoi direct en cours : lignes suivies en direct (envoi → envoyé / échec).
+  const [sending, setSending] = React.useState<InterventionShare[] | null>(null)
 
   React.useEffect(() => {
     if (!open || !session) return
     setQueue(null)
+    setSending(null)
+    setGroups(null)
     setOpened(new Set())
     setSelected(new Set())
     setError(null)
@@ -116,11 +129,49 @@ function SendDialog({
 
   const chosen = contacts.filter((c) => selected.has(c.id))
 
+  // Suivi en direct des envois directs (le serveur les fait partir un par un).
+  const refreshSending = React.useCallback(() => {
+    if (!session || !sending) return
+    getShares(session.sessionId, intervention.id)
+      .then((d) => setSending((cur) => (cur ? d.shares.filter((x) => cur.some((c) => c.id === x.id)) : cur)))
+      .catch(() => {})
+  }, [session, sending, intervention.id])
+  useLiveEvents(['interventions_changed'], refreshSending)
+
+  const showGroups = async () => {
+    if (!session) return
+    setError(null)
+    try {
+      setGroups(await listGroups(session.sessionId))
+    } catch (e) {
+      setError(friendlyError(e, 'Impossible de lire tes groupes.'))
+    }
+  }
+
+  const addGroup = async (g: WhatsAppGroup) => {
+    if (!session) return
+    try {
+      const c = await addContact(session.sessionId, { name: g.name, phone: g.id, category })
+      setContacts((list) => [...list, c].sort((a, b) => a.name.localeCompare(b.name)))
+      setSelected((sel) => new Set(sel).add(c.id))
+      setGroups(null)
+    } catch (e) {
+      setError(friendlyError(e, "Impossible d'ajouter le groupe."))
+    }
+  }
+
   const send = async () => {
     if (!session || chosen.length === 0) return
     setBusy(true)
     setError(null)
     try {
+      if (direct) {
+        const ids = chosen.map((c) => c.id)
+        const { shares } = await sendDirect(session.sessionId, intervention.id, ids, message)
+        setSending(shares.filter((x) => x.status === 'envoi' && ids.includes(x.contact_id ?? '')))
+        onSent()
+        return
+      }
       await recordShares(
         session.sessionId,
         intervention.id,
@@ -141,11 +192,43 @@ function SendDialog({
         <DialogHeader>
           <DialogTitle>Envoyer la fiche</DialogTitle>
           <DialogDescription>
-            {queue ? 'Ouvre chaque conversation et appuie sur Envoyer dans WhatsApp.' : 'Choisis la liste et les contacts.'}
+            {sending
+              ? 'Envoi depuis ton WhatsApp relié.'
+              : queue
+                ? 'Ouvre chaque conversation et appuie sur Envoyer dans WhatsApp.'
+                : direct
+                  ? 'Choisis la liste et les contacts : le message part directement de ton WhatsApp.'
+                  : 'Choisis la liste et les contacts. Astuce : relie ton WhatsApp dans Réglages pour envoyer en un clic.'}
           </DialogDescription>
         </DialogHeader>
 
-        {queue ? (
+        {sending ? (
+          <div className="flex flex-col gap-2">
+            {sending.map((x) => (
+              <div key={x.id} className="flex items-center justify-between gap-2 rounded-xl border border-border/60 px-3 py-2.5 text-sm">
+                <span className="min-w-0 truncate font-medium">{x.contact_name}</span>
+                {x.status === 'envoye' ? (
+                  <Badge variant="success" className="shrink-0 text-[10px]">
+                    <Check className="size-3" /> Envoyé
+                  </Badge>
+                ) : x.status === 'echec' ? (
+                  <span className="shrink-0 text-right text-xs text-destructive">
+                    <X className="mr-0.5 inline size-3" />
+                    {x.error || 'Échec'}
+                  </span>
+                ) : (
+                  <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                    <Loader2 className="size-3.5 animate-spin" /> En file…
+                  </span>
+                )}
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">Les messages partent un par un, à quelques secondes d'intervalle. Tu peux fermer cette fenêtre.</p>
+            <DialogFooter>
+              <Button onClick={() => onOpenChange(false)}>Fermer</Button>
+            </DialogFooter>
+          </div>
+        ) : queue ? (
           <div className="flex flex-col gap-2">
             {queue.map((c) => (
               <a
@@ -215,7 +298,16 @@ function SendDialog({
                   />
                   <button type="button" className="min-w-0 flex-1 text-left" onClick={() => toggle(c.id)}>
                     <span className="block truncate font-medium">{c.name}</span>
-                    <span className="block text-xs text-muted-foreground">{c.phone}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {isGroup(c.phone) ? (
+                        <>
+                          <Users className="mr-1 inline size-3" />
+                          Groupe WhatsApp
+                        </>
+                      ) : (
+                        c.phone
+                      )}
+                    </span>
                   </button>
                   <Button
                     variant="ghost"
@@ -243,9 +335,34 @@ function SendDialog({
                   onChange={(e) => setNewPhone(e.target.value)}
                 />
               </div>
-              <Button variant="outline" size="sm" className="w-fit" onClick={add} disabled={!newName.trim() || !newPhone.trim()}>
-                <Plus className="size-4" /> Ajouter
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" className="w-fit" onClick={add} disabled={!newName.trim() || !newPhone.trim()}>
+                  <Plus className="size-4" /> Ajouter
+                </Button>
+                {direct && (
+                  <Button variant="outline" size="sm" className="w-fit" onClick={showGroups}>
+                    <Users className="size-4" /> Ajouter un groupe WhatsApp
+                  </Button>
+                )}
+              </div>
+              {groups && (
+                <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+                  {groups.length === 0 && <p className="text-xs text-muted-foreground">Aucun groupe trouvé.</p>}
+                  {groups
+                    .filter((g) => !contacts.some((c) => c.phone === g.id && c.category === category))
+                    .map((g) => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => addGroup(g)}
+                        className="flex items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm hover:bg-secondary"
+                      >
+                        <span className="truncate">{g.name}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">{g.size} membres</span>
+                      </button>
+                    ))}
+                </div>
+              )}
             </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
@@ -298,7 +415,7 @@ export function WhatsAppShareStatus({ intervention, refreshKey }: { intervention
   const [shares, setShares] = React.useState<InterventionShare[]>([])
   const [takenBy, setTaken] = React.useState<TakenBy | null>(null)
 
-  React.useEffect(() => {
+  const load = React.useCallback(() => {
     if (!session) return
     getShares(session.sessionId, intervention.id)
       .then((d) => {
@@ -306,7 +423,12 @@ export function WhatsAppShareStatus({ intervention, refreshKey }: { intervention
         setTaken(d.takenBy)
       })
       .catch(() => {})
-  }, [session, intervention.id, refreshKey])
+  }, [session, intervention.id])
+  React.useEffect(() => {
+    load()
+  }, [load, refreshKey])
+  // Envois directs : « en file » → envoyé / échec, en direct.
+  useLiveEvents(['interventions_changed'], load)
 
   // Un contact par personne (le plus récent envoi), pour le choix « Prise par ».
   const recipients = [...new Map(shares.filter((s) => s.contact_id).map((s) => [s.contact_id!, s])).values()]
@@ -325,8 +447,8 @@ export function WhatsAppShareStatus({ intervention, refreshKey }: { intervention
         <p className="text-sm font-semibold">Envoyée sur WhatsApp</p>
         <div className="flex flex-wrap gap-1.5">
           {recipients.map((s) => (
-            <Badge key={s.contact_id} variant="outline" className="text-[10px]">
-              {s.contact_name} · {CATEGORY_LABEL[s.category]} · {fmt(s.sent_at)}
+            <Badge key={s.contact_id} variant={s.status === 'echec' ? 'destructive' : 'outline'} className="text-[10px]">
+              {s.contact_name} · {CATEGORY_LABEL[s.category]} · {s.status === 'envoi' ? 'en file' : s.status === 'echec' ? 'échec' : fmt(s.sent_at)}
             </Badge>
           ))}
         </div>
