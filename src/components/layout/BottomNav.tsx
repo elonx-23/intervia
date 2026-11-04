@@ -1,8 +1,9 @@
-import { ClipboardList, FileText, LayoutDashboard, LineChart, Plus, Receipt, X } from 'lucide-react'
+import { ClipboardList, FileText, LayoutDashboard, LineChart, Plus, Receipt, Sparkles, X } from 'lucide-react'
 import type { ComponentType } from 'react'
 import * as React from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 
+import { AiDevisDialog } from '@/components/AiDevisDialog'
 import { useAuth } from '@/lib/auth'
 import { useLiquidTouch } from '@/hooks/useLiquidTouch'
 import { createDevis, createFactureDirect } from '@/lib/documents'
@@ -195,6 +196,7 @@ export function BottomNav() {
   const safeAreaBottom = useSafeAreaBottom()
   const isAdmin = session?.role === 'admin'
   const [createOpen, setCreateOpen] = React.useState(false)
+  const [aiOpen, setAiOpen] = React.useState(false)
   const [creating, setCreating] = React.useState(false)
   const fab = useLiquidTouch<HTMLButtonElement>()
   const left: NavItem[] = isAdmin
@@ -258,6 +260,8 @@ export function BottomNav() {
   }
 
   const actions: CreateAction[] = [
+    // Admin : devis préparé par l'IA à partir du message d'un technicien.
+    ...(isAdmin ? [{ key: 'ia', label: 'Génération automatique', icon: Sparkles, onClick: () => setAiOpen(true) }] : []),
     { key: 'devis', label: 'Nouveau devis', icon: FileText, onClick: newDevis },
     { key: 'facture', label: 'Nouvelle facture', icon: Receipt, onClick: newFacture },
     { key: 'rapport', label: "Rapport d'intervention", icon: ClipboardList, onClick: () => navigate('/rapports/nouveau') },
@@ -283,6 +287,7 @@ export function BottomNav() {
     // conteneur) reste net au-dessus.
     <>
       <CreateActions open={createOpen} onClose={() => setCreateOpen(false)} actions={actions} />
+      {isAdmin && <AiDevisDialog open={aiOpen} onOpenChange={setAiOpen} />}
 
       {/* Lueur colorée fixe SOUS la barre (jamais À L'INTÉRIEUR de son
           verre) — c'est le contenu réel derrière un backdrop-filter qui lui

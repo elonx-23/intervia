@@ -6,6 +6,7 @@ import { notifyAdmin } from '../notify.mjs'
 import { sendMail } from '../mailer.mjs'
 import { generateDocumentPdfBuffer } from '../pdf.mjs'
 import { companyForTeam } from '../company.mjs'
+import { draftDevisFromText } from '../aiDevis.mjs'
 import { PIXEL_GIF, emailsForDocument, finishEmail, recordClick, recordOpen, startEmail, trackedLink, trackingPixel } from '../emailTracking.mjs'
 import { broadcast } from '../events.mjs'
 import { rateLimit } from '../rateLimit.mjs'
@@ -519,6 +520,19 @@ documentsRouter.get('/:id/converted-to', (req, res) => {
     .prepare("SELECT * FROM documents WHERE kind = 'facture' AND source_devis_id = ? ORDER BY created_at ASC LIMIT 1")
     .get(req.params.id)
   res.json(facture ? toApi(facture) : null)
+})
+
+// « Génération automatique » (admin) : brouillon de devis à partir du message
+// d'un technicien — rien n'est enregistré ici, le devis est créé ensuite par
+// la route de création habituelle, une fois relu.
+documentsRouter.post('/ai-draft', requireAdmin, externalActionLimiter, async (req, res) => {
+  try {
+    res.json(await draftDevisFromText(req.caller.team_id, req.body?.text))
+  } catch (e) {
+    if (e.status === 400) return res.status(400).json({ error: e.message })
+    console.log(`[devis ia] ${e.message}`)
+    res.status(502).json({ error: 'La génération a échoué, réessaie dans un instant.' })
+  }
 })
 
 // Un devis démarre en brouillon (à valider/signer). Une facture créée
