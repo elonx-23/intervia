@@ -18,6 +18,7 @@ import {
   totalTTC,
   type PseDocument,
 } from '@/lib/documents'
+import { documentTone } from '@/lib/tones'
 import { friendlyError } from '@/lib/errors'
 
 // Même règle d'identification que côté serveur (téléphone en priorité, sinon
@@ -132,7 +133,7 @@ export default function ClientDetail() {
                     </div>
                     <div className="shrink-0 flex items-center gap-2">
                       <span className="font-semibold tabular-nums">{ttc.toFixed(2)} €</span>
-                      <Badge variant={d.status === 'payee' || d.status === 'signe' ? 'success' : 'outline'}>
+                      <Badge variant={documentTone(d.kind, d.status)}>
                         {statusLabel}
                       </Badge>
                     </div>

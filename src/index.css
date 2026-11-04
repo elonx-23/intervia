@@ -1,33 +1,69 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* Police de l'app, servie par l'app elle-même (pas de requête vers Google). */
+@import "@fontsource-variable/plus-jakarta-sans";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 1.15rem;
-  --background: oklch(0.965 0.012 258);
-  --foreground: oklch(0.18 0.02 260);
-  --card: oklch(0.995 0.004 258);
-  --card-foreground: oklch(0.18 0.02 260);
-  --popover: oklch(0.995 0.004 258);
-  --popover-foreground: oklch(0.18 0.02 260);
-  --primary: oklch(0.58 0.19 259);
-  --primary-foreground: oklch(0.99 0.005 255);
-  --secondary: oklch(0.93 0.016 259);
-  --secondary-foreground: oklch(0.28 0.03 260);
-  --muted: oklch(0.93 0.016 259);
-  --muted-foreground: oklch(0.42 0.025 260);
-  --accent: oklch(0.9 0.05 259);
-  --accent-foreground: oklch(0.3 0.1 259);
-  --destructive: oklch(0.58 0.22 25);
+  /* ===== Identité Intervia =====
+     Un bleu franc pour la marque et l'action principale, des neutres froids
+     et calmes, et une TEINTE PAR RUBRIQUE (voir --tone-*) : le même code
+     couleur partout — icônes, pastilles, statuts — pour se repérer d'un coup
+     d'œil. Chaque teinte existe en trois intensités : la couleur, son encre
+     (texte lisible posé sur la version douce) et sa version douce (fond). */
+  --radius: 1.1rem;
+  --background: oklch(0.972 0.007 258);
+  --foreground: oklch(0.21 0.028 264);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.028 264);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.028 264);
+  --primary: oklch(0.55 0.21 263);
+  --primary-foreground: oklch(0.99 0.005 263);
+  --secondary: oklch(0.952 0.011 262);
+  --secondary-foreground: oklch(0.3 0.03 264);
+  --muted: oklch(0.952 0.011 262);
+  --muted-foreground: oklch(0.5 0.022 264);
+  --accent: oklch(0.94 0.032 263);
+  --accent-foreground: oklch(0.36 0.12 263);
+  --destructive: oklch(0.58 0.21 25);
   --destructive-foreground: oklch(0.99 0 0);
-  --success: oklch(0.55 0.15 149);
+  --success: oklch(0.6 0.15 155);
   --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.6 0.15 75);
-  --warning-foreground: oklch(0.99 0 0);
-  --border: oklch(0.82 0.02 259);
-  --input: oklch(0.82 0.02 259);
-  --ring: oklch(0.58 0.19 259 / 50%);
+  --warning: oklch(0.74 0.16 70);
+  --warning-foreground: oklch(0.24 0.06 60);
+  --border: oklch(0.915 0.011 262);
+  --input: oklch(0.885 0.013 262);
+  --ring: oklch(0.55 0.21 263 / 45%);
+  /* Ombre des cartes : douce, légèrement teintée de bleu (jamais noire). */
+  --surface-shadow: 0 1px 2px oklch(0.35 0.05 264 / 6%), 0 6px 18px -8px oklch(0.35 0.08 264 / 14%);
+
+  /* Teintes par rubrique / statut : couleur · encre · fond doux. */
+  --tone-blue: oklch(0.55 0.21 263);
+  --tone-blue-ink: oklch(0.44 0.18 263);
+  --tone-blue-soft: oklch(0.94 0.04 263);
+  --tone-violet: oklch(0.56 0.21 295);
+  --tone-violet-ink: oklch(0.45 0.19 295);
+  --tone-violet-soft: oklch(0.945 0.04 295);
+  --tone-green: oklch(0.6 0.15 155);
+  --tone-green-ink: oklch(0.44 0.12 155);
+  --tone-green-soft: oklch(0.95 0.045 155);
+  --tone-cyan: oklch(0.63 0.13 220);
+  --tone-cyan-ink: oklch(0.46 0.11 225);
+  --tone-cyan-soft: oklch(0.95 0.035 220);
+  --tone-amber: oklch(0.74 0.16 70);
+  --tone-amber-ink: oklch(0.5 0.13 60);
+  --tone-amber-soft: oklch(0.96 0.05 80);
+  --tone-orange: oklch(0.67 0.18 45);
+  --tone-orange-ink: oklch(0.5 0.16 40);
+  --tone-orange-soft: oklch(0.955 0.04 50);
+  --tone-red: oklch(0.58 0.21 25);
+  --tone-red-ink: oklch(0.48 0.19 25);
+  --tone-red-soft: oklch(0.95 0.035 25);
+  --tone-slate: oklch(0.55 0.025 264);
+  --tone-slate-ink: oklch(0.42 0.025 264);
+  --tone-slate-soft: oklch(0.945 0.01 264);
 
   /* Le "verre" translucide (header, bottom-nav, cartes, menus déroulants) :
      un blanc pur translucide posé sur un fond quasi blanc (--background,
@@ -62,29 +98,55 @@
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.16 0.014 260);
-  --foreground: oklch(0.97 0.006 260);
-  --card: oklch(0.21 0.016 260);
-  --card-foreground: oklch(0.97 0.006 260);
-  --popover: oklch(0.21 0.016 260);
-  --popover-foreground: oklch(0.97 0.006 260);
-  --primary: oklch(0.68 0.17 259);
-  --primary-foreground: oklch(0.14 0.02 260);
-  --secondary: oklch(0.28 0.016 260);
-  --secondary-foreground: oklch(0.97 0.006 260);
-  --muted: oklch(0.28 0.016 260);
-  --muted-foreground: oklch(0.68 0.015 260);
-  --accent: oklch(0.32 0.05 259);
-  --accent-foreground: oklch(0.9 0.03 259);
-  --destructive: oklch(0.7 0.19 25);
+  --background: oklch(0.15 0.012 264);
+  --foreground: oklch(0.965 0.006 264);
+  --card: oklch(0.205 0.014 264);
+  --card-foreground: oklch(0.965 0.006 264);
+  --popover: oklch(0.225 0.015 264);
+  --popover-foreground: oklch(0.965 0.006 264);
+  --primary: oklch(0.585 0.2 263);
+  --primary-foreground: oklch(0.99 0.005 263);
+  --secondary: oklch(0.265 0.016 264);
+  --secondary-foreground: oklch(0.95 0.006 264);
+  --muted: oklch(0.265 0.016 264);
+  --muted-foreground: oklch(0.7 0.014 264);
+  --accent: oklch(0.29 0.045 263);
+  --accent-foreground: oklch(0.9 0.04 263);
+  --destructive: oklch(0.66 0.19 25);
   --destructive-foreground: oklch(0.99 0 0);
-  --success: oklch(0.72 0.16 149);
-  --success-foreground: oklch(0.14 0.02 260);
+  --success: oklch(0.7 0.15 155);
+  --success-foreground: oklch(0.16 0.03 155);
   --warning: oklch(0.8 0.14 75);
-  --warning-foreground: oklch(0.2 0.04 75);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.68 0.17 259 / 50%);
+  --warning-foreground: oklch(0.2 0.04 70);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 13%);
+  --ring: oklch(0.63 0.19 263 / 50%);
+  --surface-shadow: 0 1px 0 oklch(1 0 0 / 4%) inset, 0 8px 24px -12px oklch(0 0 0 / 55%);
+
+  --tone-blue: oklch(0.68 0.17 263);
+  --tone-blue-ink: oklch(0.8 0.11 263);
+  --tone-blue-soft: oklch(0.3 0.07 263);
+  --tone-violet: oklch(0.7 0.17 295);
+  --tone-violet-ink: oklch(0.82 0.11 295);
+  --tone-violet-soft: oklch(0.3 0.07 295);
+  --tone-green: oklch(0.72 0.15 155);
+  --tone-green-ink: oklch(0.83 0.12 155);
+  --tone-green-soft: oklch(0.29 0.06 155);
+  --tone-cyan: oklch(0.74 0.12 220);
+  --tone-cyan-ink: oklch(0.84 0.09 220);
+  --tone-cyan-soft: oklch(0.29 0.05 225);
+  --tone-amber: oklch(0.8 0.14 75);
+  --tone-amber-ink: oklch(0.86 0.12 80);
+  --tone-amber-soft: oklch(0.31 0.06 70);
+  --tone-orange: oklch(0.74 0.16 50);
+  --tone-orange-ink: oklch(0.84 0.11 55);
+  --tone-orange-soft: oklch(0.3 0.06 45);
+  --tone-red: oklch(0.68 0.19 25);
+  --tone-red-ink: oklch(0.8 0.12 25);
+  --tone-red-soft: oklch(0.3 0.07 25);
+  --tone-slate: oklch(0.68 0.02 264);
+  --tone-slate-ink: oklch(0.8 0.015 264);
+  --tone-slate-soft: oklch(0.28 0.014 264);
 
   --glass-bg: oklch(0.22 0.02 260 / 48%);
   --glass-bg-strong: oklch(0.19 0.02 260 / 68%);
@@ -126,6 +188,33 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --font-sans: 'Plus Jakarta Sans Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+
+  --color-tone-blue: var(--tone-blue);
+  --color-tone-blue-ink: var(--tone-blue-ink);
+  --color-tone-blue-soft: var(--tone-blue-soft);
+  --color-tone-violet: var(--tone-violet);
+  --color-tone-violet-ink: var(--tone-violet-ink);
+  --color-tone-violet-soft: var(--tone-violet-soft);
+  --color-tone-green: var(--tone-green);
+  --color-tone-green-ink: var(--tone-green-ink);
+  --color-tone-green-soft: var(--tone-green-soft);
+  --color-tone-cyan: var(--tone-cyan);
+  --color-tone-cyan-ink: var(--tone-cyan-ink);
+  --color-tone-cyan-soft: var(--tone-cyan-soft);
+  --color-tone-amber: var(--tone-amber);
+  --color-tone-amber-ink: var(--tone-amber-ink);
+  --color-tone-amber-soft: var(--tone-amber-soft);
+  --color-tone-orange: var(--tone-orange);
+  --color-tone-orange-ink: var(--tone-orange-ink);
+  --color-tone-orange-soft: var(--tone-orange-soft);
+  --color-tone-red: var(--tone-red);
+  --color-tone-red-ink: var(--tone-red-ink);
+  --color-tone-red-soft: var(--tone-red-soft);
+  --color-tone-slate: var(--tone-slate);
+  --color-tone-slate-ink: var(--tone-slate-ink);
+  --color-tone-slate-soft: var(--tone-slate-soft);
 }
 
 @layer base {
@@ -156,8 +245,12 @@
   body {
     @apply text-foreground overscroll-none;
     background: transparent;
-    font-family:
-      -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-family: var(--font-sans);
+    /* Chiffres alignés (montants, heures, totaux) et rendu net. */
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: 0;
     overscroll-behavior: none;
     /* Ancre le débordement de rebond iOS à la couleur de fond de l'app au
        lieu du blanc/noir par défaut du système quand on tire trop en haut
@@ -210,7 +303,18 @@
      l'application, un peu comme une enseigne plutôt qu'un libellé de
      formulaire. */
   .font-brand {
-    font-family: 'Poppins', ui-rounded, system-ui, sans-serif;
+    font-family: var(--font-sans);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  /* Surface des cartes : nette et pleine (lisible, et fluide au défilement
+     sur iPhone — le flou « verre » est réservé à ce qui flotte : barres,
+     menus, bulles). */
+  .surface {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: var(--surface-shadow);
   }
 
   /* Fond sobre façon iOS (type "Réglages"/"Fichiers") : pas un fond coloré
@@ -226,10 +330,14 @@
     position: fixed;
     inset: 0;
     z-index: -1;
-    background: linear-gradient(180deg, oklch(0.97 0.014 258), oklch(0.93 0.02 259) 55%, oklch(0.87 0.028 261));
+    background:
+      radial-gradient(120% 60% at 50% -10%, oklch(0.93 0.05 263 / 70%), transparent 60%),
+      linear-gradient(180deg, oklch(0.975 0.008 258), oklch(0.955 0.012 260));
   }
   .dark .app-backdrop {
-    background: linear-gradient(180deg, oklch(0.2 0.014 260), oklch(0.15 0.014 260) 55%, oklch(0.11 0.012 260));
+    background:
+      radial-gradient(120% 60% at 50% -10%, oklch(0.3 0.08 263 / 45%), transparent 60%),
+      linear-gradient(180deg, oklch(0.16 0.013 264), oklch(0.13 0.011 264));
   }
 
   /* Matériau "Liquid Glass" (raffinement iOS 27) : bord assombri pour la

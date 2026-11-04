@@ -55,6 +55,7 @@ import {
   pruneItems,
 } from '@/lib/documents'
 import { friendlyError } from '@/lib/errors'
+import { documentTone } from '@/lib/tones'
 import { isoLocalDate } from '@/lib/utils'
 
 export default function FactureEdit() {
@@ -449,7 +450,7 @@ export default function FactureEdit() {
                   <div className="flex flex-col items-end gap-1">
                     <span className="text-sm text-muted-foreground">{new Date(doc.issue_date).toLocaleDateString('fr-FR')}</span>
                     <div className="flex flex-wrap justify-end gap-1">
-                      <Badge variant={doc.status === 'payee' ? 'success' : 'warning'}>
+                      <Badge variant={documentTone('facture', doc.status)}>
                         {FACTURE_STATUS_LABELS[doc.status as keyof typeof FACTURE_STATUS_LABELS]}
                       </Badge>
                       {doc.signature_data && <Badge variant="success">Signée</Badge>}

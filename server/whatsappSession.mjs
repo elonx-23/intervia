@@ -93,6 +93,8 @@ export async function connect(teamId) {
   if (current?.sock && ['connexion', 'qr', 'connecte'].includes(current.status)) return sessionStatus(teamId)
 
   fs.mkdirSync(authDir(teamId), { recursive: true })
+  // Fonction de la bibliothèque WhatsApp (pas un hook React, malgré son nom).
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const { state, saveCreds } = await useMultiFileAuthState(authDir(teamId))
   const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined }))
   const sock = makeWASocket({

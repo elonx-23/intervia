@@ -7,6 +7,7 @@ import { AiDevisDialog } from '@/components/AiDevisDialog'
 import { useAuth } from '@/lib/auth'
 import { useLiquidTouch } from '@/hooks/useLiquidTouch'
 import { createDevis, createFactureDirect } from '@/lib/documents'
+import { TONE_ICON, type Tone } from '@/lib/tones'
 import { cn } from '@/lib/utils'
 
 const MORPH_DURATION_MS = 500
@@ -132,6 +133,8 @@ interface CreateAction {
   label: string
   icon: ComponentType<{ className?: string }>
   onClick: () => void
+  // Teinte de la rubrique (voir lib/tones.ts).
+  tone?: Tone
 }
 
 // Bulles d'action qui montent depuis le bouton "+" — même langage visuel que
@@ -175,7 +178,9 @@ function CreateActions({ open, onClose, actions }: { open: boolean; onClose: () 
               )}
               style={{ transitionDelay: open ? `${i * 40}ms` : '0ms' }}
             >
-              <span className="flex size-12 shrink-0 items-center justify-center rounded-full border border-border bg-card text-primary shadow-[0_6px_16px_-4px_rgba(0,0,0,0.3)]">
+              <span
+                className={`flex size-12 shrink-0 items-center justify-center rounded-full border border-border shadow-[0_6px_16px_-4px_rgba(0,0,0,0.3)] ${TONE_ICON[action.tone ?? 'blue']}`}
+              >
                 <Icon className="size-6" />
               </span>
               <span className="flex-1 rounded-full border border-border bg-card px-5 py-3 text-base font-semibold whitespace-nowrap shadow-[0_6px_16px_-4px_rgba(0,0,0,0.25)]">
@@ -261,10 +266,10 @@ export function BottomNav() {
 
   const actions: CreateAction[] = [
     // Admin : devis préparé par l'IA à partir du message d'un technicien.
-    ...(isAdmin ? [{ key: 'ia', label: 'Génération automatique', icon: Sparkles, onClick: () => setAiOpen(true) }] : []),
-    { key: 'devis', label: 'Nouveau devis', icon: FileText, onClick: newDevis },
-    { key: 'facture', label: 'Nouvelle facture', icon: Receipt, onClick: newFacture },
-    { key: 'rapport', label: "Rapport d'intervention", icon: ClipboardList, onClick: () => navigate('/rapports/nouveau') },
+    ...(isAdmin ? [{ key: 'ia', label: 'Génération automatique', icon: Sparkles, onClick: () => setAiOpen(true), tone: 'violet' as const }] : []),
+    { key: 'devis', label: 'Nouveau devis', icon: FileText, onClick: newDevis, tone: 'violet' },
+    { key: 'facture', label: 'Nouvelle facture', icon: Receipt, onClick: newFacture, tone: 'green' },
+    { key: 'rapport', label: "Rapport d'intervention", icon: ClipboardList, onClick: () => navigate('/rapports/nouveau'), tone: 'blue' },
   ]
 
   return (

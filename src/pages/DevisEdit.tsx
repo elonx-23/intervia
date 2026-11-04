@@ -46,6 +46,7 @@ import {
   isValidItem,
   pruneItems,
 } from '@/lib/documents'
+import { documentTone } from '@/lib/tones'
 import { friendlyError } from '@/lib/errors'
 
 export default function DevisEdit() {
@@ -384,7 +385,7 @@ export default function DevisEdit() {
                   <div className="flex flex-col items-end gap-1">
                     <span className="text-sm text-muted-foreground">{new Date(doc.issue_date).toLocaleDateString('fr-FR')}</span>
                     {doc.status !== 'brouillon' && (
-                      <Badge variant={doc.status === 'signe' ? 'success' : 'outline'}>
+                      <Badge variant={documentTone('devis', doc.status)}>
                         {DEVIS_STATUS_LABELS[doc.status as keyof typeof DEVIS_STATUS_LABELS]}
                       </Badge>
                     )}

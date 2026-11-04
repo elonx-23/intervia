@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useLiveEvents } from '@/hooks/useLiveEvents'
 import { useAuth } from '@/lib/auth'
 import { friendlyError } from '@/lib/errors'
+import { callTone, friendlyDate } from '@/lib/tones'
 import { formatPhone, listCalls, retryTranscription, type CallRecord } from '@/lib/telephony'
 
 function fmtDuration(seconds: number | null) {
@@ -20,12 +21,7 @@ function fmtDuration(seconds: number | null) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-function statusVariant(status: string): 'success' | 'warning' | 'destructive' | 'outline' {
-  if (status === 'terminé') return 'success'
-  if (status === 'en-cours') return 'warning'
-  if (status === 'manqué' || status === 'échoué') return 'destructive'
-  return 'outline'
-}
+
 
 function CallCard({ call, hasOpenaiKey, onChanged }: { call: CallRecord; hasOpenaiKey: boolean; onChanged: () => void }) {
   const { session } = useAuth()
@@ -59,11 +55,11 @@ function CallCard({ call, hasOpenaiKey, onChanged }: { call: CallRecord; hasOpen
               {call.client_name && number && <p className="truncate text-xs text-muted-foreground">{formatPhone(number)}</p>}
             </div>
           </div>
-          <Badge variant={statusVariant(call.status)}>{call.status}</Badge>
+          <Badge variant={callTone(call.status)}>{call.status.charAt(0).toUpperCase() + call.status.slice(1)}</Badge>
         </div>
 
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{new Date(call.started_at).toLocaleString('fr-FR')}</span>
+          <span>{friendlyDate(call.started_at)}</span>
           {fmtDuration(call.duration_seconds) && <span>· {fmtDuration(call.duration_seconds)}</span>}
         </div>
 

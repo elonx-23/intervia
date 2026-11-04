@@ -38,6 +38,7 @@ import { useAuth } from '@/lib/auth'
 import { friendlyError } from '@/lib/errors'
 import { broadcastUrgentNotification } from '@/lib/notifications'
 import { getAdminStats, getAdminTimeseries, type AdminStats, type CaPoint } from '@/lib/statistiques'
+import { TONE_ICON } from '@/lib/tones'
 import { isoLocalDate } from '@/lib/utils'
 
 const DEFAULT_MESSAGE =
@@ -79,12 +80,14 @@ function StatCard({
 }) {
   return (
     <Card className="py-4">
-      <CardContent className="flex flex-col gap-2 px-4">
-        <div className={`flex size-8 items-center justify-center rounded-full ${tone}`}>
-          <Icon className="size-4" />
+      <CardContent className="flex flex-col gap-3 px-4">
+        <div className={`flex size-9 items-center justify-center rounded-xl ${tone}`}>
+          <Icon className="size-[18px]" />
         </div>
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <span className="text-xl font-semibold tabular-nums">{value}</span>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-2xl font-bold tracking-tight tabular-nums">{value}</span>
+          <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        </div>
       </CardContent>
     </Card>
   )
@@ -154,26 +157,41 @@ export default function Dashboard() {
     <Page title="Tableau de bord">
       <div className="flex flex-col gap-4">
         <Link to="/interventions/nouvelle">
-          <Button size="lg" className="h-16 w-full gap-2.5 text-base shadow-lg shadow-primary/25">
+          <Button size="lg" className="h-14 w-full gap-2.5 text-base shadow-lg shadow-primary/25">
             <Plus className="size-6" />
             Nouvelle intervention
           </Button>
         </Link>
 
-        {/* Journal des appels (écoute, résumé, fiche créée depuis l'appel). */}
-        <Link to="/telephonie">
-          <Button size="lg" variant="outline" className="h-14 w-full gap-2.5 text-base">
-            <PhoneIncoming className="size-5" />
-            Appels reçus
-          </Button>
-        </Link>
-
-        <Link to="/paiements">
-          <Button size="lg" variant="outline" className="h-14 w-full gap-2.5 text-base">
-            <QrCode className="size-5" />
-            Lien de paiement
-          </Button>
-        </Link>
+        {/* Raccourcis : chaque rubrique avec sa couleur (voir lib/tones.ts). */}
+        <div className="grid grid-cols-2 gap-3">
+          <Link to="/telephonie" className="liquid">
+            <Card className="h-full py-4">
+              <CardContent className="flex flex-col gap-3 px-4">
+                <span className={`flex size-10 items-center justify-center rounded-xl ${TONE_ICON.cyan}`}>
+                  <PhoneIncoming className="size-5" />
+                </span>
+                <span className="flex flex-col">
+                  <span className="text-[15px] font-semibold">Appels reçus</span>
+                  <span className="text-xs text-muted-foreground">Écoute et résumés</span>
+                </span>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link to="/paiements" className="liquid">
+            <Card className="h-full py-4">
+              <CardContent className="flex flex-col gap-3 px-4">
+                <span className={`flex size-10 items-center justify-center rounded-xl ${TONE_ICON.amber}`}>
+                  <QrCode className="size-5" />
+                </span>
+                <span className="flex flex-col">
+                  <span className="text-[15px] font-semibold">Lien de paiement</span>
+                  <span className="text-xs text-muted-foreground">Lien et QR code</span>
+                </span>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -206,37 +224,37 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-3">
               <StatCard
                 icon={Euro}
-                tone="bg-primary/15 text-primary"
+                tone={TONE_ICON.amber}
                 label="CA facturé"
                 value={fmtEuro(stats.ca)}
               />
               <StatCard
                 icon={ClipboardList}
-                tone="bg-violet-500/15 text-violet-600 dark:text-violet-400"
+                tone={TONE_ICON.blue}
                 label="Interventions"
                 value={stats.total_interventions}
               />
               <StatCard
                 icon={CalendarClock}
-                tone="bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                tone={TONE_ICON.cyan}
                 label="En cours"
                 value={stats.en_cours}
               />
               <StatCard
                 icon={CheckCircle2}
-                tone="bg-success/15 text-success"
+                tone={TONE_ICON.green}
                 label="Terminées"
                 value={stats.terminees}
               />
               <StatCard
                 icon={Wallet}
-                tone="bg-teal-500/15 text-teal-600 dark:text-teal-400"
+                tone={TONE_ICON.orange}
                 label="Panier moyen"
                 value={fmtEuro(stats.panier_moyen)}
               />
               <StatCard
                 icon={TrendingUp}
-                tone="bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                tone={TONE_ICON.violet}
                 label="Devis signés"
                 value={stats.taux_conversion === null ? '—' : `${stats.taux_conversion.toFixed(0)} %`}
               />

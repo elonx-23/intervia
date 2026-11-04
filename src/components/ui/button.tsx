@@ -16,11 +16,13 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-[linear-gradient(180deg,color-mix(in_oklch,var(--primary)_82%,white)_0%,var(--primary)_60%,color-mix(in_oklch,var(--primary)_92%,black)_100%)] text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.08),0_4px_10px_-4px_var(--tw-shadow-color)] shadow-primary/40 hover:brightness-105',
+          'bg-[linear-gradient(180deg,color-mix(in_oklch,var(--primary)_88%,white)_0%,var(--primary)_55%,color-mix(in_oklch,var(--primary)_90%,black)_100%)] dark:bg-[linear-gradient(180deg,color-mix(in_oklch,var(--primary)_94%,white)_0%,var(--primary)_55%,color-mix(in_oklch,var(--primary)_88%,black)_100%)] text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.08),0_4px_10px_-4px_var(--tw-shadow-color)] shadow-primary/40 hover:brightness-105',
         destructive:
           'bg-[linear-gradient(180deg,color-mix(in_oklch,var(--destructive)_82%,white)_0%,var(--destructive)_60%,color-mix(in_oklch,var(--destructive)_92%,black)_100%)] text-destructive-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.08),0_4px_10px_-4px_var(--tw-shadow-color)] shadow-destructive/40 hover:brightness-105',
+        // Bouton secondaire : fond plein et net (plus de verre flouté — plus
+        // lisible, et plus léger à afficher sur téléphone).
         outline:
-          'glass-lens border border-black/[0.06] bg-secondary/70 bg-[radial-gradient(130%_130%_at_12%_-15%,rgba(255,255,255,0.55),transparent_55%)] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] backdrop-blur-xl hover:bg-accent hover:text-accent-foreground dark:border-white/10 dark:bg-white/[0.06] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]',
+          'border border-border bg-card text-foreground shadow-[0_1px_2px_oklch(0.35_0.05_264/6%)] hover:bg-secondary dark:bg-secondary/60 dark:hover:bg-secondary',
         secondary:
           'bg-secondary text-secondary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] hover:bg-secondary/80 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
         ghost: 'hover:bg-accent hover:text-accent-foreground',

@@ -1,4 +1,4 @@
-import { ClipboardList, Search, X } from 'lucide-react'
+import { ClipboardList, FileText, Receipt, Search, X } from 'lucide-react'
 import * as React from 'react'
 import { Link } from 'react-router-dom'
 
@@ -6,12 +6,16 @@ import { Loader } from '@/components/Loader'
 import { Page } from '@/components/layout/Page'
 import { EmptyState } from '@/components/layout/EmptyState'
 import { SwipeToDelete, SwipeToDeleteGroup } from '@/components/SwipeToDelete'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { TONE_ICON, documentTone } from '@/lib/tones'
 import { Input } from '@/components/ui/input'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useAuth } from '@/lib/auth'
 import { useLiveEvents } from '@/hooks/useLiveEvents'
 import {
+  DEVIS_STATUS_LABELS,
+  FACTURE_STATUS_LABELS,
   cancelDeletionRequest,
   confirmDeletion,
   deleteDocument,
@@ -259,14 +263,14 @@ export function Documents({ kind }: { kind: DocumentKind }) {
         {filtered !== null && filtered.length === 0 && <EmptyState label="Aucun document" />}
 
         <SwipeToDeleteGroup>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-4">
             {groups.map((group) => (
-              <div key={group.year} className="flex flex-col">
-                <div className="flex items-center justify-between rounded-lg bg-secondary/60 px-3 py-1.5 text-sm text-muted-foreground">
+              <div key={group.year} className="flex flex-col gap-2">
+                <div className="flex items-center justify-between px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                   <span>{group.year}</span>
-                  <span>{group.total.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
+                  <span className="normal-case">{group.total.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
                 </div>
-                <div className="flex flex-col">
+                <div className="surface flex flex-col overflow-hidden rounded-2xl">
                   {group.items.map((entry) =>
                     entry.type === 'rapport' ? (
                       <ReportRow
@@ -362,19 +366,27 @@ function DocumentRow({
     <SwipeToDelete id={d.id} onDelete={onDelete} className="rounded-none">
       <Link
         to={`/${d.kind === 'devis' ? 'devis' : 'factures'}/${d.id}/modifier`}
-        className={`liquid flex items-center justify-between gap-3 border-b border-border/60 px-3 py-3 last:border-b-0 ${alt ? 'bg-secondary/70' : 'bg-background'}`}
+        className={`liquid flex items-center justify-between gap-3 border-b border-border/60 bg-card px-3 py-3 last:border-b-0 ${alt ? '' : ''}`}
       >
-        <div className="min-w-0">
-          <p className="truncate font-medium">{client || 'Client sans nom'}</p>
-          <p className="text-xs text-muted-foreground">{d.number}</p>
-        </div>
-        <div className="shrink-0 text-right">
-          <p className="font-medium">{ttc.toFixed(2)} €</p>
-          {statusLine && (
-            <p className={`text-xs ${statusLine.tone === 'success' ? 'text-success' : 'text-muted-foreground'}`}>
-              {statusLine.text}
+        <div className="flex min-w-0 items-center gap-3">
+          <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${TONE_ICON[documentTone(d.kind, d.status)]}`}>
+            {d.kind === 'devis' ? <FileText className="size-[18px]" /> : <Receipt className="size-[18px]" />}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-[15px] font-semibold">{client || 'Client sans nom'}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {d.number}
+              {statusLine ? ` · ${statusLine.text}` : ''}
             </p>
-          )}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <p className="text-[15px] font-bold">{ttc.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</p>
+          <Badge variant={documentTone(d.kind, d.status)}>
+            {d.kind === 'devis'
+              ? DEVIS_STATUS_LABELS[d.status as keyof typeof DEVIS_STATUS_LABELS]
+              : FACTURE_STATUS_LABELS[d.status as keyof typeof FACTURE_STATUS_LABELS]}
+          </Badge>
         </div>
       </Link>
     </SwipeToDelete>

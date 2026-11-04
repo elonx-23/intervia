@@ -4,17 +4,41 @@ import * as React from 'react'
 
 import { cn } from '@/lib/utils'
 
+// Pastilles douces : fond teinté léger + texte de la même teinte, lisibles en
+// clair comme en sombre. Une teinte = une signification, partout dans l'app
+// (voir src/lib/tones.ts).
+// Classes écrites en toutes lettres : Tailwind ne génère que celles qu'il lit dans le code.
+const TONE = {
+  blue: 'border-transparent bg-tone-blue-soft text-tone-blue-ink',
+  violet: 'border-transparent bg-tone-violet-soft text-tone-violet-ink',
+  green: 'border-transparent bg-tone-green-soft text-tone-green-ink',
+  cyan: 'border-transparent bg-tone-cyan-soft text-tone-cyan-ink',
+  amber: 'border-transparent bg-tone-amber-soft text-tone-amber-ink',
+  orange: 'border-transparent bg-tone-orange-soft text-tone-orange-ink',
+  red: 'border-transparent bg-tone-red-soft text-tone-red-ink',
+  slate: 'border-transparent bg-tone-slate-soft text-tone-slate-ink',
+}
+
 const badgeVariants = cva(
-  'relative isolate inline-flex items-center justify-center gap-1 overflow-hidden rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap w-fit before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-1/2 before:rounded-t-full before:bg-gradient-to-b before:from-white/40 before:to-white/0',
+  'inline-flex items-center justify-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap w-fit [&_svg]:size-3',
   {
     variants: {
       variant: {
-        default: 'border-transparent bg-primary text-primary-foreground ring-1 ring-inset ring-white/15',
+        default: TONE.blue,
         secondary: 'border-transparent bg-secondary text-secondary-foreground',
-        destructive: 'border-transparent bg-destructive text-destructive-foreground ring-1 ring-inset ring-white/15',
-        success: 'border-transparent bg-success text-success-foreground ring-1 ring-inset ring-white/15',
-        warning: 'border-transparent bg-warning text-warning-foreground ring-1 ring-inset ring-white/15',
-        outline: 'border-border text-foreground before:hidden',
+        destructive: TONE.red,
+        success: TONE.green,
+        warning: TONE.amber,
+        outline: 'border-border text-muted-foreground',
+        blue: TONE.blue,
+        violet: TONE.violet,
+        green: TONE.green,
+        cyan: TONE.cyan,
+        amber: TONE.amber,
+        orange: TONE.orange,
+        red: TONE.red,
+        slate: TONE.slate,
+        solid: 'border-transparent bg-primary text-primary-foreground',
       },
     },
     defaultVariants: {

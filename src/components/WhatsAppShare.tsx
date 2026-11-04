@@ -513,11 +513,19 @@ const fmt = (iso: string) =>
 const euros = (n: number) => `${n.toFixed(2).replace('.', ',').replace(',00', '')} €`
 
 // Bouton « Envoyer » (barre d'actions de la fiche).
-export function WhatsAppSendButton({ intervention, onSent }: { intervention: Intervention; onSent: () => void }) {
+export function WhatsAppSendButton({
+  intervention,
+  onSent,
+  className,
+}: {
+  intervention: Intervention
+  onSent: () => void
+  className?: string
+}) {
   const [open, setOpen] = React.useState(false)
   return (
     <>
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+      <Button variant="outline" size="sm" className={className} onClick={() => setOpen(true)}>
         <Send className="size-4" />
         Envoyer
       </Button>

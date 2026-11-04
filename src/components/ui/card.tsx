@@ -2,15 +2,10 @@ import * as React from 'react'
 
 import { cn } from '@/lib/utils'
 
-function Card({ className, style, ...props }: React.ComponentProps<'div'>) {
-  return (
-    <div
-      data-slot="card"
-      className={cn('glass flex flex-col gap-4 rounded-2xl py-5 text-card-foreground', className)}
-      style={{ '--elevation-shadow': '0 1px 3px rgba(0,0,0,0.06), 0 8px 20px -10px rgba(0,0,0,0.12)', ...style } as React.CSSProperties}
-      {...props}
-    />
-  )
+// Carte pleine et nette (.surface) — le verre flouté est réservé aux
+// éléments qui flottent (barres, menus), pour la lisibilité et la fluidité.
+function Card({ className, ...props }: React.ComponentProps<'div'>) {
+  return <div data-slot="card" className={cn('surface flex flex-col gap-4 rounded-2xl py-5 text-card-foreground', className)} {...props} />
 }
 
 function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {

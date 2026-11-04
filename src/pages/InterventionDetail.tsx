@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Copy, FileText, Navigation, PhoneIncoming } from 'lucide-react'
+import { Check, ChevronRight, Copy, FileText, KeyRound, MapPin, Navigation, Phone, PhoneIncoming } from 'lucide-react'
 import * as React from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
@@ -7,11 +7,14 @@ import { PhotoUploader } from '@/components/PhotoUploader'
 import { CallSummary } from '@/components/CallSummary'
 import { WhatsAppSendButton, WhatsAppShareStatus } from '@/components/WhatsAppShare'
 import { ficheText } from '@/lib/whatsapp'
+import { INTERVENTION_TONE, TONE_ICON, documentTone, friendlyDate } from '@/lib/tones'
+import { TradeIcon } from '@/components/TradeIcon'
 import { RecordingPlayer } from '@/components/RecordingPlayer'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { NumberInput } from '@/components/NumberInput'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -282,22 +285,28 @@ export default function InterventionDetail() {
   return (
     <Page title={intervention.reference}>
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <Badge>{STATUS_LABELS[intervention.status]}</Badge>
-          <div className="flex gap-1">
-            {isAdmin && documents.length === 0 && (
-              <Button variant="ghost" size="sm" onClick={createDevisFromIntervention} disabled={creatingDevis}>
-                <FileText className="size-4" /> Devis
-              </Button>
-            )}
-            {isAdmin && <WhatsAppSendButton intervention={intervention} onSent={() => setShareKey((k) => k + 1)} />}
-            {isAdmin && (
-              <Button variant="ghost" size="sm" onClick={copyWhatsApp}>
-                {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-                WhatsApp
-              </Button>
-            )}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <Badge variant={INTERVENTION_TONE[intervention.status]} className="px-3 py-1 text-[13px]">
+              {STATUS_LABELS[intervention.status]}
+            </Badge>
+            {isAdmin && <span className="text-xs text-muted-foreground">Créée {friendlyDate(intervention.created_at).toLowerCase()}</span>}
           </div>
+          {/* Actions : grille qui passe à la ligne — jamais de débordement. */}
+          {isAdmin && (
+            <div className="flex gap-2 *:min-w-0 *:flex-1">
+              {documents.length === 0 && (
+                <Button variant="outline" size="sm" className="w-full" onClick={createDevisFromIntervention} disabled={creatingDevis}>
+                  <FileText className="size-4 text-tone-violet" /> Devis
+                </Button>
+              )}
+              <WhatsAppSendButton intervention={intervention} onSent={() => setShareKey((k) => k + 1)} className="w-full" />
+              <Button variant="outline" size="sm" className="w-full" onClick={copyWhatsApp}>
+                {copied ? <Check className="size-4 text-tone-green" /> : <Copy className="size-4" />}
+                {copied ? 'Copié' : 'Copier'}
+              </Button>
+            </div>
+          )}
         </div>
 
         {isAdmin && <WhatsAppShareStatus intervention={intervention} refreshKey={shareKey} />}
@@ -388,11 +397,9 @@ export default function InterventionDetail() {
               </div>
               <div className="flex flex-col gap-2">
                 <Label>Montant (€)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={form.amount}
-                  onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                <NumberInput
+                  value={form.amount ? Number(String(form.amount).replace(',', '.')) : 0}
+                  onValueChange={(v) => setForm((f) => ({ ...f, amount: v ? String(v) : '' }))}
                 />
               </div>
               <div className="flex gap-2">
@@ -407,28 +414,59 @@ export default function InterventionDetail() {
           </Card>
         ) : (
           <Card>
-            <CardContent className="flex flex-col gap-2">
-              <p className="font-medium">{client || 'Client sans nom'}</p>
-              {intervention.phone && <p className="text-sm text-muted-foreground">{intervention.phone}</p>}
-              {(intervention.address || intervention.city) && (
-                <p className="text-sm text-muted-foreground">
-                  {[intervention.address, [intervention.postal_code, intervention.city].filter(Boolean).join(' ')]
-                    .filter(Boolean)
-                    .join(', ')}
-                </p>
-              )}
-              {intervention.floor && <p className="text-sm">Étage : {intervention.floor}</p>}
-              {intervention.access_codes && <p className="text-sm">Codes d'accès : {intervention.access_codes}</p>}
-              <p className="text-sm">{intervention.intervention_type}</p>
-              {intervention.description && <p className="text-sm text-muted-foreground">{intervention.description}</p>}
-              <p className="text-sm">
-                💰 Tarif : {intervention.amount != null ? `${intervention.amount} €` : 'non défini'}
-              </p>
-              {isAdmin && (
-                <p className="text-xs text-muted-foreground">
-                  Créée le {new Date(intervention.created_at).toLocaleString('fr-FR')}
-                </p>
-              )}
+            <CardContent className="flex flex-col gap-4">
+              {/* En-tête : métier (pastille colorée au statut), client, prix annoncé. */}
+              <div className="flex items-center gap-3">
+                <span className={`flex size-12 shrink-0 items-center justify-center rounded-2xl ${TONE_ICON[INTERVENTION_TONE[intervention.status]]}`}>
+                  <TradeIcon trade={intervention.intervention_type} className="size-6" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-lg font-bold">{client || 'Client sans nom'}</p>
+                  <p className="truncate text-sm text-muted-foreground">{intervention.intervention_type || 'Type non précisé'}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-lg font-bold">{intervention.amount != null ? `${String(intervention.amount).replace('.', ',')} €` : '—'}</p>
+                  <p className="text-[11px] text-muted-foreground">prix annoncé</p>
+                </div>
+              </div>
+
+              {intervention.description && <p className="rounded-xl bg-secondary/60 px-3 py-2.5 text-sm">{intervention.description}</p>}
+
+              <div className="flex flex-col gap-2.5 text-sm">
+                {intervention.phone && (
+                  <a href={`tel:${intervention.phone.replace(/\s/g, '')}`} className="flex items-center gap-3">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-tone-green-soft text-tone-green-ink">
+                      <Phone className="size-4" />
+                    </span>
+                    <span className="font-medium">{intervention.phone}</span>
+                  </a>
+                )}
+                {(intervention.address || intervention.city) && (
+                  <a
+                    href={`https://waze.com/ul?q=${encodeURIComponent([intervention.address, [intervention.postal_code, intervention.city].filter(Boolean).join(' ')].filter(Boolean).join(', '))}&navigate=yes`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-3"
+                  >
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-tone-blue-soft text-tone-blue-ink">
+                      <MapPin className="size-4" />
+                    </span>
+                    <span className="min-w-0">{[intervention.address, [intervention.postal_code, intervention.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')}</span>
+                  </a>
+                )}
+                {(intervention.floor || intervention.access_codes) && (
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-tone-amber-soft text-tone-amber-ink">
+                      <KeyRound className="size-4" />
+                    </span>
+                    <span className="min-w-0">
+                      {[intervention.floor && `Étage ${intervention.floor.replace(/^étage\s*/i, '')}`, intervention.access_codes && `Code ${intervention.access_codes}`]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  </div>
+                )}
+              </div>
               {isAdmin && (
                 <Button variant="outline" size="sm" className="mt-2 self-start" onClick={() => setEditing(true)}>
                   Modifier
@@ -459,7 +497,7 @@ export default function InterventionDetail() {
                         <p className="truncate text-sm font-medium">
                           {d.kind === 'devis' ? 'Devis' : 'Facture'} {d.number}
                         </p>
-                        <Badge variant={d.status === 'payee' || d.status === 'signe' ? 'success' : 'outline'}>
+                        <Badge variant={documentTone(d.kind, d.status)}>
                           {statusLabel}
                         </Badge>
                       </div>
