@@ -135,7 +135,7 @@ export async function generateDocumentPdf(doc: PseDocument): Promise<jsPDF> {
   pdf.setTextColor(...DARK)
   pdf.setFont('helvetica', 'normal')
   pdf.setFontSize(8.5)
-  const companyLines = [COMPANY.name, COMPANY.address, 'France', COMPANY.email || 'gestion@pse-depannage.fr']
+  const companyLines = [COMPANY.name, COMPANY.address, COMPANY.address && 'France', COMPANY.phone, COMPANY.email].filter(Boolean)
   companyLines.forEach((line, i) => pdf.text(line, margin, y + i * 4.2))
 
   pdf.setFont('helvetica', 'bold')

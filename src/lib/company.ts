@@ -1,16 +1,17 @@
-// Valeurs par défaut tant que rien n'a été configuré dans Réglages →
-// Entreprise. L'objet est ensuite MUTÉ en place (pas remplacé) par
+// Vide tant que les vrais réglages (Réglages → Entreprise, ou l'entreprise
+// émettrice d'un document public) ne sont pas chargés : jamais de valeur de
+// repli au nom d'Intervia, qui n'est que le logiciel. L'objet est ensuite MUTÉ en place (pas remplacé) par
 // applyCompanySettings() une fois les vrais réglages chargés — tous les
 // endroits qui lisent COMPANY.xxx au moment de l'affichage (pas à
 // l'import) voient donc automatiquement la valeur à jour.
 export const COMPANY = {
-  name: 'Intervia',
-  legalForm: 'SARL',
-  address: '58 rue de Monceau, 75008 Paris',
-  siret: '99474318500013',
-  vatNumber: 'FR26994743185',
-  naf: '4322A',
-  vatRegime: 'TVA sur les encaissements',
+  name: '',
+  legalForm: '',
+  address: '',
+  siret: '',
+  vatNumber: '',
+  naf: '',
+  vatRegime: '',
   phone: '',
   email: '',
   logoUrl: '',
@@ -20,12 +21,14 @@ export function applyCompanySettings(data: Partial<typeof COMPANY>) {
   Object.assign(COMPANY, data)
 }
 
+// Uniquement les morceaux renseignés (miroir de companyLegalLines côté serveur).
 export function legalFooterLines(): string[] {
+  const join = (parts: Array<string | false>) => parts.filter((p) => p && String(p).trim()).join(' — ')
   return [
-    `${COMPANY.name} — ${COMPANY.legalForm} — ${COMPANY.address}`,
-    `SIRET ${COMPANY.siret} — TVA ${COMPANY.vatNumber} — NAF ${COMPANY.naf}`,
+    join([COMPANY.name, COMPANY.legalForm, COMPANY.address]),
+    join([!!COMPANY.siret && `SIRET ${COMPANY.siret}`, !!COMPANY.vatNumber && `TVA ${COMPANY.vatNumber}`, !!COMPANY.naf && `NAF ${COMPANY.naf}`]),
     COMPANY.vatRegime,
-  ]
+  ].filter((l) => l.trim())
 }
 
 // Conditions générales affichées sur les devis/factures (onglet "Aperçu" et
@@ -46,7 +49,7 @@ export function legalClauses(): { title: string; body: string }[] {
     },
     {
       title: 'Modalités de paiement',
-      body: `Sauf mention contraire, le règlement est dû à réception de la facture. ${COMPANY.name} accepte les paiements par espèces, carte bancaire ou virement ; le paiement par chèque est accepté jusqu'à 100 €. Toute intervention réalisée en semaine entre 19h et 6h, ainsi que les week-ends et jours fériés, fait l'objet d'une majoration de 100 %.`,
+      body: `Sauf mention contraire, le règlement est dû à réception de la facture. ${COMPANY.name || "L'entreprise"} accepte les paiements par espèces, carte bancaire ou virement ; le paiement par chèque est accepté jusqu'à 100 €. Toute intervention réalisée en semaine entre 19h et 6h, ainsi que les week-ends et jours fériés, fait l'objet d'une majoration de 100 %.`,
     },
     {
       title: 'Pénalités de retard',
@@ -62,7 +65,7 @@ export function legalClauses(): { title: string; body: string }[] {
     },
     {
       title: 'Responsabilité',
-      body: `${COMPANY.name} ne saurait être tenue responsable des dommages résultant de l'état antérieur des installations, de vices cachés préexistants, ou d'une utilisation non conforme des équipements après intervention.`,
+      body: `${COMPANY.name || "L'entreprise"} ne saurait être tenue responsable des dommages résultant de l'état antérieur des installations, de vices cachés préexistants, ou d'une utilisation non conforme des équipements après intervention.`,
     },
     {
       title: 'Litiges et juridiction compétente',

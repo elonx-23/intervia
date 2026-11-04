@@ -97,6 +97,23 @@ if (fs.existsSync(distDir)) {
   // fichier statique existant (ex. /devis/abc123/modifier, tapée
   // directement ou rechargée) doit quand même renvoyer index.html, pour que
   // react-router prenne le relais côté client plutôt qu'un 404 serveur.
+  // Liens envoyés aux clients d'une entreprise (devis / facture) : la page
+  // ne doit rien montrer du logiciel — ni dans l'onglet, ni dans l'aperçu du
+  // lien (messagerie), ni en icône. Titre et icône neutres ; la page met
+  // ensuite le numéro du document et le nom de l'entreprise dans le titre.
+  const indexHtml = () => fs.readFileSync(path.join(distDir, 'index.html'), 'utf8')
+  const neutralIcon =
+    "data:image/svg+xml," +
+    encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect x="6" y="3" width="20" height="26" rx="3" fill="#64748b"/><rect x="10" y="10" width="12" height="2" fill="#fff"/><rect x="10" y="15" width="12" height="2" fill="#fff"/><rect x="10" y="20" width="8" height="2" fill="#fff"/></svg>',
+    )
+  app.get(['/signer/:token', '/facture/:token'], (req, res) => {
+    const html = indexHtml()
+      .replace(/<link rel="(?:icon|apple-touch-icon|manifest)"[^>]*>\s*/g, '')
+      .replace(/<meta name="apple-mobile-web-app-title"[^>]*>/, '')
+      .replace(/<title>[^<]*<\/title>/, `<title>Document</title><link rel="icon" href="${neutralIcon}" />`)
+    res.type('html').send(html)
+  })
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next()
     res.sendFile(path.join(distDir, 'index.html'))

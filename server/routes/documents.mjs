@@ -5,6 +5,7 @@ import { requireAdmin, requireAuth } from '../auth.mjs'
 import { notifyAdmin } from '../notify.mjs'
 import { sendMail } from '../mailer.mjs'
 import { generateDocumentPdfBuffer } from '../pdf.mjs'
+import { companyForTeam } from '../company.mjs'
 import { broadcast } from '../events.mjs'
 import { rateLimit } from '../rateLimit.mjs'
 import { wrapEmail, ctaButton, fallbackLink, fillEmailText, DEFAULT_EMAIL_TEXTS } from '../emailTemplates.mjs'
@@ -39,7 +40,7 @@ function itemsTotalHT(items) {
 // dur. "Intervia" (le produit, pas une entreprise cliente) sert de repli
 // tant qu'une équipe n'a pas encore renseigné la sienne.
 function companyName(teamId) {
-  return getSetting('company', teamId)?.name || 'Intervia'
+  return companyForTeam(teamId).name
 }
 
 function discountAmount(ht, discountType, discountValue) {
@@ -87,8 +88,9 @@ function escapeHtml(value) {
 // Email avec un vrai bouton d'action (pas juste un lien texte nu) — style
 // inline requis pour un rendu correct dans les clients mail (Gmail, Outlook…
 // n'appliquent pas de <style> externe).
-function emailHtml({ greeting, intro, ctaLabel, ctaLink, outro }) {
+function emailHtml({ greeting, intro, ctaLabel, ctaLink, outro, brandName }) {
   return wrapEmail({
+    brandName: brandName ?? '',
     preheader: intro.replace(/<[^>]+>/g, ''),
     bodyHtml: `
       <p>Bonjour ${escapeHtml(greeting)},</p>
@@ -116,7 +118,25 @@ function canAccess(caller, sessionId, doc) {
 documentsRouter.get('/token/:token', (req, res) => {
   const row = db.prepare('SELECT * FROM documents WHERE public_token = ? AND deleted_at IS NULL').get(req.params.token)
   if (!row) return res.status(404).json({ error: 'Document introuvable' })
-  res.json(toApi(row))
+  // Coordonnées de l'entreprise émettrice, pour que le PDF affiché au client
+  // soit exactement celui de l'entreprise (elles figurent de toute façon sur
+  // le document) — sans elles, la page affichait des valeurs par défaut.
+  const c = companyForTeam(row.team_id)
+  res.json({
+    ...toApi(row),
+    company: {
+      name: c.name,
+      legalForm: c.legalForm,
+      address: c.address,
+      siret: c.siret,
+      vatNumber: c.vatNumber,
+      naf: c.naf,
+      vatRegime: c.vatRegime,
+      phone: c.phone,
+      email: c.email,
+      logoUrl: c.logoUrl,
+    },
+  })
 })
 
 // Signature client — pour un devis, ça vaut acceptation (change le statut) ;
@@ -177,6 +197,7 @@ documentsRouter.post('/:id/relance', externalActionLimiter, async (req, res) => 
       fromName: companyName(doc.team_id),
       subject: `Rappel — Facture ${doc.number} en attente de paiement`,
       html: emailHtml({
+        brandName: companyName(doc.team_id),
         greeting: doc.client_first_name,
         intro: `Nous n'avons pas encore reçu le règlement de votre facture <strong>${doc.number}</strong> (${ttc} € TTC), jointe à cet email.`,
         ctaLabel: doc.signature_data ? 'Consulter la facture' : 'Consulter et signer la facture',
@@ -240,6 +261,7 @@ documentsRouter.post('/:id/email', externalActionLimiter, async (req, res) => {
       fromName: companyName(doc.team_id),
       subject: `Votre ${label} ${companyName(doc.team_id)} — ${doc.number}`,
       html: emailHtml({
+        brandName: companyName(doc.team_id),
         greeting: doc.client_first_name,
         intro: introText,
         ctaLabel,

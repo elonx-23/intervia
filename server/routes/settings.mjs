@@ -3,35 +3,24 @@ import { Router } from 'express'
 import { requireAdmin, requireAuth } from '../auth.mjs'
 import { db, getSetting, setSetting } from '../db.mjs'
 import { DEFAULT_EMAIL_TEXTS } from '../emailTemplates.mjs'
+import { companyForTeam } from '../company.mjs'
 
 export const settingsRouter = Router()
 settingsRouter.use(requireAuth)
 
-// Valeurs de départ si l'entreprise n'a encore rien configuré — reprennent
-// les informations déjà en dur ailleurs dans l'app avant ce réglage.
-const DEFAULT_COMPANY = {
-  name: 'Intervia',
-  legalForm: 'SARL',
-  address: '58 rue de Monceau, 75008 Paris',
-  siret: '99474318500013',
-  vatNumber: 'FR26994743185',
-  naf: '4322A',
-  vatRegime: 'TVA sur les encaissements',
-  phone: '',
-  email: '',
-  logoUrl: '',
-}
+// Aucune valeur de départ au nom du logiciel : un champ non renseigné reste
+// vide (voir company.mjs).
 
 // Lu par tout le monde (nécessaire pour générer les PDF de devis/factures
 // depuis n'importe quel compte), modifiable par l'admin uniquement. Clé
 // préfixée par équipe (voir getSetting/setSetting dans db.mjs) — chaque
 // équipe a ses propres coordonnées d'entreprise.
 settingsRouter.get('/company', (req, res) => {
-  res.json({ ...DEFAULT_COMPANY, ...(getSetting('company', req.caller.team_id) ?? {}) })
+  res.json(companyForTeam(req.caller.team_id))
 })
 
 settingsRouter.patch('/company', requireAdmin, (req, res) => {
-  const current = { ...DEFAULT_COMPANY, ...(getSetting('company', req.caller.team_id) ?? {}) }
+  const current = companyForTeam(req.caller.team_id)
   const updated = { ...current, ...(req.body ?? {}) }
   setSetting('company', updated, req.caller.team_id)
 

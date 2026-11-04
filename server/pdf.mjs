@@ -3,7 +3,7 @@ import path from 'node:path'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
-import { getSetting } from './db.mjs'
+import { companyForTeam, companyLegalLines } from './company.mjs'
 import { uploadsDir } from './routes/upload.mjs'
 
 // Miroir de src/lib/pdf.ts (design identique) mais côté serveur — utilisé
@@ -12,25 +12,9 @@ import { uploadsDir } from './routes/upload.mjs'
 // TypeScript avec des alias de chemin (@/lib/...), le serveur en JS simple,
 // pas la peine de mettre en place un module partagé pour ~250 lignes.
 //
-// Les coordonnées de l'entreprise viennent maintenant de Réglages →
-// Entreprise (table "settings"), pas d'une constante figée — ces valeurs ne
-// servent que de repli tant que rien n'a été configuré.
-const DEFAULT_COMPANY = {
-  name: 'Intervia',
-  legalForm: 'SARL',
-  address: '58 rue de Monceau, 75008 Paris',
-  siret: '99474318500013',
-  vatNumber: 'FR26994743185',
-  naf: '4322A',
-  vatRegime: 'TVA sur les encaissements',
-  phone: '',
-  email: '',
-  logoUrl: '',
-}
-
-function getCompany(teamId) {
-  return { ...DEFAULT_COMPANY, ...(getSetting('company', teamId) ?? {}) }
-}
+// Les coordonnées de l'entreprise viennent de Réglages → Entreprise, sans
+// aucune valeur de repli au nom du logiciel (voir company.mjs).
+const getCompany = companyForTeam
 
 // Lit le logo uploadé (server/uploads/logo/...) et le renvoie en base64
 // utilisable par jsPDF.addImage — jamais bloquant : n'importe quelle erreur
@@ -64,13 +48,7 @@ function readLogoDataUrl(logoUrl) {
   }
 }
 
-function legalFooterLines(company) {
-  return [
-    `${company.name} — ${company.legalForm} — ${company.address}`,
-    `SIRET ${company.siret} — TVA ${company.vatNumber} — NAF ${company.naf}`,
-    company.vatRegime,
-  ]
-}
+const legalFooterLines = companyLegalLines
 
 // Miroir de LEGAL_CLAUSES dans src/lib/company.ts.
 function legalClauses(company) {
@@ -85,7 +63,7 @@ function legalClauses(company) {
     },
     {
       title: 'Modalités de paiement',
-      body: `Sauf mention contraire, le règlement est dû à réception de la facture. ${company.name} accepte les paiements par espèces, carte bancaire ou virement ; le paiement par chèque est accepté jusqu'à 100 €. Toute intervention réalisée en semaine entre 19h et 6h, ainsi que les week-ends et jours fériés, fait l'objet d'une majoration de 100 %.`,
+      body: `Sauf mention contraire, le règlement est dû à réception de la facture. ${company.name || "L'entreprise"} accepte les paiements par espèces, carte bancaire ou virement ; le paiement par chèque est accepté jusqu'à 100 €. Toute intervention réalisée en semaine entre 19h et 6h, ainsi que les week-ends et jours fériés, fait l'objet d'une majoration de 100 %.`,
     },
     {
       title: 'Pénalités de retard',
@@ -101,7 +79,7 @@ function legalClauses(company) {
     },
     {
       title: 'Responsabilité',
-      body: `${company.name} ne saurait être tenue responsable des dommages résultant de l'état antérieur des installations, de vices cachés préexistants, ou d'une utilisation non conforme des équipements après intervention.`,
+      body: `${company.name || "L'entreprise"} ne saurait être tenue responsable des dommages résultant de l'état antérieur des installations, de vices cachés préexistants, ou d'une utilisation non conforme des équipements après intervention.`,
     },
     {
       title: 'Litiges et juridiction compétente',
@@ -223,7 +201,7 @@ export function generateDocumentPdfBuffer(doc) {
   pdf.setTextColor(...DARK)
   pdf.setFont('helvetica', 'normal')
   pdf.setFontSize(8.5)
-  const companyLines = [company.name, company.address, 'France', company.email || 'gestion@pse-depannage.fr']
+  const companyLines = [company.name, company.address, company.address && 'France', company.phone, company.email].filter(Boolean)
   companyLines.forEach((line, i) => pdf.text(line, margin, y + i * 4.2))
 
   pdf.setFont('helvetica', 'bold')

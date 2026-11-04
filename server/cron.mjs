@@ -1,3 +1,4 @@
+import { companyForTeam } from './company.mjs'
 import cron from 'node-cron'
 
 import { db, getSetting, now, uuid } from './db.mjs'
@@ -97,9 +98,10 @@ async function runAutoRelances() {
       })
       await sendMail({
         to: doc.email,
-        fromName: getSetting('company', doc.team_id)?.name || 'Intervia',
+        fromName: companyForTeam(doc.team_id).name,
         subject: `Rappel — Facture ${doc.number} en attente de paiement`,
         html: wrapEmail({
+          brandName: companyForTeam(doc.team_id).name,
           preheader: `Facture ${doc.number} en attente de paiement (${ttc} € TTC).`,
           bodyHtml: `
             <p>Bonjour ${escapeHtml(doc.client_first_name)},</p>

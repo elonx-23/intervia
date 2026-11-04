@@ -20,19 +20,28 @@ const BG_COLOR = '#f3f4f6'
 // blanc) : ces emails sont envoyés par les clients de l'app (une entreprise
 // de dépannage) à LEURS PROPRES clients — ils doivent avoir une vraie
 // identité visuelle soignée, pas un email "technique" austère.
-export function wrapEmail({ preheader, bodyHtml }) {
+// `brandName` : emails envoyés AU CLIENT d'une entreprise (devis, facture,
+// rapport) — seule l'entreprise émettrice apparaît, jamais le nom du logiciel.
+// Sans `brandName` (emails de compte : inscription, mot de passe), l'en-tête
+// reste celui d'Intervia.
+export function wrapEmail({ preheader, bodyHtml, brandName }) {
+  const forClient = brandName !== undefined
+  const header = forClient ? escapeHtml(brandName) : 'Intervia'
+  const footer = forClient
+    ? `Cet email vous a été envoyé automatiquement${brandName ? ` par ${escapeHtml(brandName)}` : ''} — merci de ne pas y répondre directement.`
+    : 'Cet email a été envoyé automatiquement par Intervia — merci de ne pas y répondre directement.'
   return `
     <div style="background: ${BG_COLOR}; padding: 32px 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">
       ${preheader ? `<div style="display:none; max-height:0; overflow:hidden; opacity:0;">${preheader}</div>` : ''}
       <div style="max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid ${BORDER_COLOR}; box-shadow: 0 1px 3px rgba(16,24,40,0.04), 0 8px 24px -8px rgba(16,24,40,0.10);">
         <div style="padding: 22px 28px; background: linear-gradient(135deg, ${BRAND_COLOR}, ${BRAND_COLOR_DARK});">
-          <span style="font-size: 18px; font-weight: 700; color: #ffffff; letter-spacing: -0.02em;">Intervia</span>
+          <span style="font-size: 18px; font-weight: 700; color: #ffffff; letter-spacing: -0.02em;">${header || '&nbsp;'}</span>
         </div>
         <div style="padding: 30px 28px; color: ${TEXT_COLOR}; font-size: 14px; line-height: 1.6;">
           ${bodyHtml}
         </div>
         <div style="padding: 16px 28px; background: ${BG_COLOR}; border-top: 1px solid ${BORDER_COLOR}; color: ${MUTED_COLOR}; font-size: 11.5px; line-height: 1.5;">
-          Cet email a été envoyé automatiquement par Intervia — merci de ne pas y répondre directement.
+          ${footer}
         </div>
       </div>
     </div>`

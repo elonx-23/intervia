@@ -1,3 +1,4 @@
+import type { CompanySettings } from '@/lib/settings'
 import { apiFetch, apiUpload } from '@/lib/api'
 
 export type DocumentKind = 'devis' | 'facture'
@@ -151,8 +152,12 @@ export async function listDocumentsByIntervention(sessionId: string, interventio
   return apiFetch<PseDocument[]>(`/api/documents/by-intervention/${interventionId}`, { sessionId })
 }
 
+// Document vu par le client via son lien, avec les coordonnées de
+// l'entreprise qui l'a émis (seules à apparaître sur la page et le PDF).
+export type PublicDocument = PseDocument & { company?: Partial<CompanySettings> }
+
 export async function getDocumentByToken(token: string) {
-  return apiFetch<PseDocument>(`/api/documents/token/${token}`)
+  return apiFetch<PublicDocument>(`/api/documents/token/${token}`)
 }
 
 export async function signDocumentPublic(token: string, signatureDataUrl: string) {

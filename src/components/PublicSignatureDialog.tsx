@@ -1,6 +1,5 @@
 import { Eraser } from 'lucide-react'
 import * as React from 'react'
-import { Link } from 'react-router-dom'
 
 import { SignaturePad, type SignaturePadHandle } from '@/components/SignaturePad'
 import { Button } from '@/components/ui/button'
@@ -10,9 +9,7 @@ import { friendlyError } from '@/lib/errors'
 
 // Bulle de signature pour le client, depuis le lien public reçu par email
 // (pas de session) — même matériau que SignOnDeviceDialog (signature au
-// doigt, acceptation des CGV), mais pointe vers /mentions-legales plutôt
-// que /reglages/conditions : cette dernière n'a pas vocation à être
-// consultée hors session.
+// doigt, acceptation des CGV imprimées sur le document).
 export function PublicSignatureDialog({
   document: doc,
   open,
@@ -64,7 +61,7 @@ export function PublicSignatureDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <CenteredDialogContent className="flex max-h-[94dvh] w-[calc(100%-1.25rem)] max-w-xl flex-col overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Signer le devis</DialogTitle>
+          <DialogTitle>{doc.kind === 'facture' ? 'Signer la facture' : 'Signer le devis'}</DialogTitle>
           <DialogDescription>
             {doc.number} · {ttc.toFixed(2)} € TTC
           </DialogDescription>
@@ -91,13 +88,8 @@ export function PublicSignatureDialog({
             className="mt-0.5 size-4 shrink-0 rounded border-input"
             style={{ accentColor: 'var(--primary)' }}
           />
-          <span>
-            J'accepte les{' '}
-            <Link to="/mentions-legales" target="_blank" className="text-primary underline underline-offset-2">
-              conditions générales de vente
-            </Link>
-            .
-          </span>
+          {/* Les CGV sont celles imprimées sur le document lui-même (pas une page du logiciel). */}
+          <span>J'accepte les conditions générales de vente figurant sur le document.</span>
         </label>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
