@@ -67,6 +67,7 @@ export const SignaturePad = React.forwardRef<SignaturePadHandle, { className?: s
 
     return (
       <canvas
+      data-no-swipe
         ref={canvasRef}
         className={className}
         onPointerDown={start}

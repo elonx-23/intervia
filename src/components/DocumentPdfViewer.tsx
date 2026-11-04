@@ -168,7 +168,13 @@ export function DocumentPdfViewer({ doc }: { doc: PseDocument }) {
     <div className="relative overflow-hidden rounded-xl border border-border bg-white">
       {status === 'loading' && <p className="py-8 text-center text-sm text-muted-foreground">Génération du PDF…</p>}
       {status === 'error' && <p className="py-8 text-center text-sm text-destructive">Erreur d'affichage.</p>}
-      <div ref={scrollerRef} className="max-h-[78dvh] overflow-auto overscroll-contain" style={{ touchAction: 'pan-x pan-y' }}>
+      <div
+        ref={scrollerRef}
+        className="max-h-[78dvh] overflow-auto overscroll-contain"
+        style={{ touchAction: 'pan-x pan-y' }}
+        // Zoomé : on se déplace dans le PDF, le glissement ne change pas d'onglet.
+        data-no-swipe={zoom > 1 ? '' : undefined}
+      >
         <div ref={contentRef} style={{ width: '100%' }} />
       </div>
       {status === 'ready' && (

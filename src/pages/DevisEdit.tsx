@@ -49,6 +49,10 @@ import {
 import { documentTone } from '@/lib/tones'
 import { InterventionContext } from '@/components/InterventionContext'
 import { formatEuro } from '@/lib/utils'
+import { sharePdf, usePreparedPdf } from '@/lib/sharePdf'
+import { useEditorSwipe } from '@/hooks/useEditorSwipe'
+
+const EDITOR_TABS = ['modifier', 'apercu', 'historique'] as const
 import { friendlyError } from '@/lib/errors'
 
 export default function DevisEdit() {
@@ -58,6 +62,10 @@ export default function DevisEdit() {
 
   const [doc, setDoc] = React.useState<PseDocument | null>(null)
   const [tab, setTab] = React.useState<DocumentEditTab>('modifier')
+  const preparedPdf = usePreparedPdf(doc)
+  // Glisser au milieu : onglet suivant / précédent ; depuis le bord gauche : retour.
+  const goBack = React.useCallback(() => navigate(-1), [navigate])
+  useEditorSwipe({ tabs: EDITOR_TABS, tab, setTab, onBack: goBack })
   const [items, setItems] = React.useState<DocumentItem[]>([])
   // Un seul article ouvert à la fois — les autres restent repliés (nom +
   // prix) pour ne pas noyer le devis sous trop de champs. Ouvrir un article
@@ -299,17 +307,8 @@ export default function DevisEdit() {
     navigate(`/devis/${copy.id}/modifier`)
   }
 
-  const share = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: `Devis ${doc.number}`, url: signLink })
-      } catch {
-        // partage annulé par l'utilisateur — rien à faire
-      }
-    } else {
-      navigator.clipboard?.writeText(signLink)
-    }
-  }
+  // Partage du fichier PDF lui-même (préparé à l'avance, voir sharePdf.ts).
+  const share = () => sharePdf(preparedPdf, doc)
 
   const convert = async () => {
     if (!session) return
