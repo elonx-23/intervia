@@ -3,6 +3,13 @@ import { Router } from 'express'
 import { db, now, uuid } from '../db.mjs'
 import { requireAdmin, requireAuth } from '../auth.mjs'
 import { notifyTechnicien } from '../notify.mjs'
+
+// « Jean Dupont a besoin d'un dépannage en serrurerie au 12 rue des Lilas. »
+function assignmentText(name, trade, address) {
+  const who = String(name ?? '').trim() || 'Un client'
+  const what = trade ? `un dépannage en ${String(trade).toLowerCase()}` : 'un dépannage'
+  return `${who} a besoin d'${what}${address ? ` au ${address}` : ''}.`
+}
 import { broadcast } from '../events.mjs'
 
 export const interventionsRouter = Router()
@@ -99,8 +106,8 @@ interventionsRouter.post('/', requireAdmin, (req, res) => {
       b.technicienId,
       req.caller.team_id,
       'intervention_assignee',
-      'Nouvelle intervention',
-      `${b.clientFirstName ?? ''} ${b.clientLastName ?? ''} — ${b.interventionType ?? ''}`.trim(),
+      '🔧 Nouvelle intervention pour toi',
+      assignmentText(`${b.clientFirstName ?? ''} ${b.clientLastName ?? ''}`, b.interventionType, b.address),
       { intervention_id: id, address: b.address },
     )
   }
@@ -188,8 +195,8 @@ interventionsRouter.post('/:id/assign', requireAdmin, (req, res) => {
     technicienId,
     req.caller.team_id,
     'intervention_assignee',
-    'Nouvelle intervention',
-    `${updated.client_first_name} ${updated.client_last_name} — ${updated.intervention_type}`.trim(),
+    '🔧 Nouvelle intervention pour toi',
+    assignmentText(`${updated.client_first_name ?? ''} ${updated.client_last_name ?? ''}`, updated.intervention_type, updated.address),
     { intervention_id: updated.id, address: updated.address },
   )
 

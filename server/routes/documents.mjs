@@ -191,8 +191,10 @@ documentsRouter.post('/:id/sign', (req, res) => {
   notifyAdmin(
     updated.team_id,
     row.kind === 'devis' ? 'devis_signe' : 'facture_signee',
-    row.kind === 'devis' ? '✅ Devis accepté !' : '✍️ Facture signée !',
-    `${updated.client_first_name} ${updated.client_last_name} — ${total.toFixed(2)} €`.trim(),
+    row.kind === 'devis' ? '✅ Devis accepté' : '✍️ Facture signée',
+    `${`${updated.client_first_name ?? ''} ${updated.client_last_name ?? ''}`.trim() || 'Ton client'} vient de signer ${
+      row.kind === 'devis' ? 'le devis' : 'la facture'
+    } ${updated.number} de ${total.toFixed(2).replace('.', ',')} €.`,
     { document_id: updated.id },
   )
 
@@ -679,8 +681,10 @@ documentsRouter.post('/:id/convert', (req, res) => {
   notifyAdmin(
     facture.team_id,
     'facture_creee',
-    '🧾 Facture à acquitter !',
-    `${facture.client_first_name} ${facture.client_last_name} — ${total.toFixed(2)} € — ${facture.number}`.trim(),
+    '🧾 Facture à encaisser',
+    `La facture ${facture.number} de ${`${facture.client_first_name ?? ''} ${facture.client_last_name ?? ''}`.trim() || 'ton client'} (${total
+      .toFixed(2)
+      .replace('.', ',')} €) est prête à être encaissée.`,
     { document_id: facture.id },
   )
 

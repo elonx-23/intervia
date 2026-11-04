@@ -163,7 +163,7 @@ export default function Dashboard() {
         <Link to="/telephonie">
           <Button size="lg" variant="outline" className="h-14 w-full gap-2.5 text-base">
             <PhoneIncoming className="size-5" />
-            Appels
+            Appels reçus
           </Button>
         </Link>
 

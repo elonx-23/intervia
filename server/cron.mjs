@@ -1,3 +1,4 @@
+import { pushoverNotifyAdmin } from './pushoverNotify.mjs'
 import { finishEmail, startEmail, trackedLink, trackingPixel } from './emailTracking.mjs'
 import { companyForTeam } from './company.mjs'
 import cron from 'node-cron'
@@ -27,6 +28,7 @@ function insertNotification(role, technicienId, teamId, type, title, body, data 
   db.prepare(
     'INSERT INTO notifications (id, recipient_role, recipient_technicien_id, team_id, type, title, body, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
   ).run(uuid(), role, technicienId, teamId, type, title, body, JSON.stringify(data), now())
+  if (role === 'admin') pushoverNotifyAdmin(teamId, type, title, body, data)
 }
 
 function runIntervationReminders() {
@@ -39,14 +41,14 @@ function runIntervationReminders() {
     .all()
 
   for (const i of rows) {
-    const label = `Rappel ${i.reminder_count + 1}/3 : ${i.client_first_name} ${i.client_last_name} attend toujours`
+    const client = `${i.client_first_name ?? ''} ${i.client_last_name ?? ''}`.trim() || 'Ton client'
     insertNotification(
       'technicien',
       i.technicien_id,
       i.team_id,
       'reminder',
-      `⏰ ${label}`,
-      i.address ?? '',
+      `⏰ Rappel ${i.reminder_count + 1} sur 3`,
+      `${client} attend toujours ton passage${i.address ? ` au ${i.address}` : ''}.`,
       { intervention_id: i.id },
     )
     db.prepare('UPDATE interventions SET reminder_count = reminder_count + 1 WHERE id = ?').run(i.id)
@@ -56,10 +58,10 @@ function runIntervationReminders() {
 const DAILY_MESSAGES = [
   "Le service est ouvert ! Prêt à cartonner aujourd'hui ? 💪",
   'C\'est parti pour une nouvelle journée de dépannage ! 🔧',
-  'Le service démarre — à toi de jouer ! ⚡',
+  'Le service démarre, à toi de jouer ! ⚡',
   'Nouvelle journée, nouvelles interventions. On y va ! 🚀',
-  'Service ouvert — reste joignable, les clients comptent sur toi 📞',
-  "C'est l'heure ! Le service PSE est lancé pour la journée 🛠️",
+  'Le service est ouvert. Reste joignable, les clients comptent sur toi 📞',
+  "C'est l'heure ! Le service est lancé pour la journée 🛠️",
   'Journée qui commence, énergie à fond ! Le service est ouvert 🔥',
 ]
 
@@ -67,7 +69,7 @@ function runDailyServiceMessage() {
   const techs = db.prepare('SELECT id, team_id FROM technicians WHERE active = 1').all()
   for (const t of techs) {
     const msg = DAILY_MESSAGES[Math.floor(Math.random() * DAILY_MESSAGES.length)]
-    insertNotification('technicien', t.id, t.team_id, 'daily_message', 'Service ouvert', msg)
+    insertNotification('technicien', t.id, t.team_id, 'daily_message', '☀️ Service ouvert', msg)
   }
 }
 
@@ -126,8 +128,8 @@ async function runAutoRelances() {
         null,
         doc.team_id,
         'relance_auto',
-        '📧 Relance automatique envoyée',
-        `${doc.client_first_name} ${doc.client_last_name} — ${doc.number}`,
+        '📧 Relance envoyée',
+        `La facture ${doc.number} de ${`${doc.client_first_name ?? ''} ${doc.client_last_name ?? ''}`.trim() || 'ton client'} a été relancée automatiquement.`,
         { document_id: doc.id },
       )
     } catch (e) {

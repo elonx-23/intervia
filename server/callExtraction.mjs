@@ -142,12 +142,15 @@ export function insertInterventionFromExtraction(call, extracted) {
   )
   db.prepare('UPDATE calls SET intervention_id = ? WHERE id = ?').run(id, call.id)
 
-  const who = [extracted.first_name, extracted.last_name].filter(Boolean).join(' ') || call.from_number || 'Client'
+  const who = [extracted.first_name, extracted.last_name].filter(Boolean).join(' ') || toFrenchNational(call.from_number) || 'Un client'
+  const where = extracted.city ? ` à ${extracted.city}` : ''
   notifyAdmin(
     call.team_id,
     'fiche_depuis_appel',
-    'Nouvelle fiche créée depuis un appel',
-    `${reference} — ${who}${trade ? ` — ${trade}` : ''}`,
+    '📞 Nouvelle intervention à envoyer',
+    trade
+      ? `${who} a appelé pour un dépannage en ${trade.toLowerCase()}${where}. La fiche ${reference} est prête.`
+      : `${who} a appelé pour un dépannage${where}. La fiche ${reference} est prête.`,
     { intervention_id: id },
   )
   broadcast('interventions_changed', {}, call.team_id)

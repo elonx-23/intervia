@@ -1,5 +1,6 @@
 import { db, now, uuid } from './db.mjs'
 import { pushNotification } from './push.mjs'
+import { pushoverNotifyAdmin } from './pushoverNotify.mjs'
 
 // Liste fermée des types réglables depuis Réglages → Notifications — sert à
 // la fois à valider ce qu'un PATCH peut modifier et à construire les deux
@@ -42,6 +43,7 @@ export function notifyAdmin(teamId, type, title, body, data = {}) {
     'INSERT INTO notifications (id, recipient_role, recipient_technicien_id, team_id, type, title, body, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
   ).run(id, 'admin', null, teamId, type, title, body, JSON.stringify(data), createdAt)
   pushSoon({ id, recipient_role: 'admin', recipient_technicien_id: null, team_id: teamId, title, body, data })
+  pushoverNotifyAdmin(teamId, type, title, body, data)
 }
 
 export function notifyTechnicien(technicienId, teamId, type, title, body, data = {}) {
