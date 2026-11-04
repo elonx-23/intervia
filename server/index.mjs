@@ -97,7 +97,19 @@ app.use('/api/payments', paymentsRouter)
 // ce bloc ne fait rien et n'interfère jamais avec `npm run dev`.
 const distDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist')
 if (fs.existsSync(distDir)) {
-  app.use(express.static(distDir))
+  // Fichiers de l'app (JS, CSS, polices…) : leur nom contient une empreinte
+  // qui change à chaque mise en ligne → gardés 1 an sur le téléphone, sans
+  // jamais redemander au serveur. Un fichier introuvable répond 404 (et non
+  // la page d'accueil : un ancien onglet aurait sinon reçu du HTML à la place
+  // du JS et affiché une page blanche après une mise à jour).
+  app.use(
+    '/assets',
+    express.static(path.join(distDir, 'assets'), { immutable: true, maxAge: '365d' }),
+    (req, res) => res.status(404).type('text/plain').send('Fichier introuvable'),
+  )
+  // Le reste (index.html, manifest, icônes) : toujours revérifié, pour que
+  // la nouvelle version arrive dès qu'elle est en ligne.
+  app.use(express.static(distDir, { maxAge: 0, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }))
   // Route de secours SPA : toute URL qui n'est ni une route API ni un
   // fichier statique existant (ex. /devis/abc123/modifier, tapée
   // directement ou rechargée) doit quand même renvoyer index.html, pour que

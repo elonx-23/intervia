@@ -34,7 +34,10 @@ interface AuthContextValue {
 }
 
 const STORAGE_KEY = 'pse_session'
-const POLL_INTERVAL_MS = 5000
+// Vérification de la session (déconnectée à distance, équipe suspendue) :
+// toutes les 30 s quand l'app est à l'écran, et tout de suite quand on y
+// revient — plutôt que toutes les 5 s, même en arrière-plan.
+const POLL_INTERVAL_MS = 30000
 
 // Mode démo optionnel (VITE_SKIP_AUTH=true dans .env) : saute l'écran de
 // connexion. Désactivé par défaut maintenant que le serveur local répond.
@@ -163,10 +166,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     check()
-    const interval = setInterval(check, POLL_INTERVAL_MS)
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') check()
+    }, POLL_INTERVAL_MS)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') check()
+    }
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       cancelled = true
       clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [session])
 
