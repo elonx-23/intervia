@@ -8,6 +8,7 @@ import { runScheduledBackup } from './backup.mjs'
 import { deliverPendingPush } from './push.mjs'
 import { generateDocumentPdfBuffer } from './pdf.mjs'
 import { syncAllTeams } from './telephonySync.mjs'
+import { syncPushoverCalls } from './pushoverCalls.mjs'
 import { wrapEmail, ctaButton, fallbackLink } from './emailTemplates.mjs'
 
 // Utilisée pour construire le lien de consultation dans les emails envoyés
@@ -160,6 +161,8 @@ export function startCronJobs() {
   cron.schedule('* * * * *', deliverPendingPush)
   // Relève chez OVH les appels enregistrés (pas de webhook côté OVH).
   cron.schedule('* * * * *', syncAllTeams)
+  // Appels de l'opérateur de l'admin, relevés via ses notifications Pushover.
+  cron.schedule('* * * * *', syncPushoverCalls)
   cron.schedule('*/30 * * * *', runNotificationsCleanup)
   cron.schedule('0 4 * * *', runLoginAttemptsCleanup, { timezone: 'Europe/Paris' })
   // Sauvegarde complète de la base en pleine nuit, hors heures de service.
