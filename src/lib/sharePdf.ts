@@ -37,6 +37,11 @@ export async function sharePdf(prepared: React.RefObject<File | null>, doc: PseD
     const pdf = await generateDocumentPdf(doc)
     file = new File([pdf.output('blob') as Blob], `${doc.number}.pdf`, { type: 'application/pdf' })
   }
+  await shareFile(file, title)
+}
+
+// Partage d'un fichier (feuille de partage du téléphone), sinon téléchargement.
+export async function shareFile(file: File, title: string) {
   if (navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title })

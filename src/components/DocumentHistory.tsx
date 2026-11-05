@@ -8,7 +8,7 @@ import { useLiveEvents } from '@/hooks/useLiveEvents'
 import { useAuth } from '@/lib/auth'
 import { getDocumentEmails, type DocumentEmail, type PseDocument } from '@/lib/documents'
 
-interface Event {
+export interface HistoryEvent {
   icon: ComponentType<{ className?: string }>
   label: ReactNode
   date: string
@@ -16,7 +16,13 @@ interface Event {
 }
 
 function fmt(iso: string) {
-  return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return new Date(iso).toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 // Chronologie des événements connus du document — reconstruite à partir des
@@ -24,7 +30,7 @@ function fmt(iso: string) {
 // mais suffisant pour retracer le parcours du devis/facture). `convertedFacture`
 // (uniquement pour un devis) affiche un lien direct vers la facture générée.
 // Suivi d'un email : reçu par la messagerie, ouvert, lien cliqué.
-function EmailTracking({ email }: { email: DocumentEmail }) {
+export function EmailTracking({ email }: { email: DocumentEmail }) {
   if (email.status === 'echec') {
     return <p className="text-xs text-destructive">Non envoyé : {email.error || 'erreur inconnue'}</p>
   }
@@ -45,7 +51,8 @@ function EmailTracking({ email }: { email: DocumentEmail }) {
       )}
       {email.clicked_at ? (
         <Badge variant="success" className="text-[10px]">
-          <MousePointerClick className="size-3" /> Lien cliqué{email.click_count > 1 ? ` ${email.click_count}×` : ''} · {fmt(email.clicked_at)}
+          <MousePointerClick className="size-3" /> Lien cliqué{email.click_count > 1 ? ` ${email.click_count}×` : ''} ·{' '}
+          {fmt(email.clicked_at)}
         </Badge>
       ) : (
         <Badge variant="outline" className="text-[10px] text-muted-foreground">
@@ -73,8 +80,12 @@ export function DocumentHistory({ doc, convertedFacture }: { doc: PseDocument; c
   // Ouverture / clic du client : l'historique se met à jour tout seul.
   useLiveEvents(['documents_changed'], loadEmails)
 
-  const events: Event[] = [
-    { icon: FileText, label: `${doc.kind === 'devis' ? 'Devis' : 'Facture'} créé${doc.kind === 'facture' ? 'e' : ''}`, date: doc.created_at },
+  const events: HistoryEvent[] = [
+    {
+      icon: FileText,
+      label: `${doc.kind === 'devis' ? 'Devis' : 'Facture'} créé${doc.kind === 'facture' ? 'e' : ''}`,
+      date: doc.created_at,
+    },
   ]
 
   if (doc.kind === 'facture' && doc.source_devis_id) {
@@ -130,8 +141,12 @@ export function DocumentHistory({ doc, convertedFacture }: { doc: PseDocument; c
     })
   }
 
-  const sorted = events.sort((a, b) => a.date.localeCompare(b.date))
+  return <HistoryTimeline events={events} />
+}
 
+// Chronologie (du plus ancien au plus récent) — partagée avec les rapports.
+export function HistoryTimeline({ events }: { events: HistoryEvent[] }) {
+  const sorted = [...events].sort((a, b) => a.date.localeCompare(b.date))
   return (
     <div className="flex flex-col gap-4 py-2">
       {sorted.map((event, i) => (
@@ -149,9 +164,7 @@ export function DocumentHistory({ doc, convertedFacture }: { doc: PseDocument; c
           </div>
         </div>
       ))}
-      {sorted.length === 1 && (
-        <p className="text-sm text-muted-foreground">Aucun autre événement pour le moment.</p>
-      )}
+      {sorted.length === 1 && <p className="text-sm text-muted-foreground">Aucun autre événement pour le moment.</p>}
     </div>
   )
 }

@@ -194,9 +194,8 @@ export default function Statistiques() {
     setDownloading(true)
     try {
       const list = await listReleveInterventions(session.sessionId, from, to)
-      const name = [session.technicienFirstName, session.technicienLastName].filter(Boolean).join(' ')
       const { downloadRelevePdf } = await import('@/lib/pdf')
-      downloadRelevePdf(name || session.username, from, to, list)
+      downloadRelevePdf(from, to, list)
     } catch (e) {
       setError(friendlyError(e, 'Erreur.'))
     } finally {

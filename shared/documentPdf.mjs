@@ -7,50 +7,31 @@
 // et guillemets français passent ; les espaces insécables fines (que produit
 // toLocaleString) ne passent PAS — les montants sont donc formatés à la main.
 
-const A4_W = 210
-const A4_H = 297
-const M = 16 // marge
-const CONTENT_W = A4_W - M * 2
+import {
+  A4_H,
+  A4_W,
+  CONTENT_W,
+  GREEN,
+  GREEN_BG,
+  GROUP,
+  INK,
+  LINE,
+  M,
+  MUTED,
+  TEXT,
+  ZEBRA,
+  drawBrandHeader,
+  drawCards,
+  drawFooters,
+  drawMetaRow,
+  euro,
+  fontSetter,
+  frDate,
+} from './pdfParts.mjs'
 
-// Palette sobre et lisible à l'impression.
-const INK = [15, 23, 42] // titres, en-tête de tableau, total
-const TEXT = [30, 41, 59]
-const MUTED = [100, 116, 139]
-const LINE = [226, 232, 240]
-const PANEL = [248, 250, 252]
-const ZEBRA = [250, 251, 253]
-const GROUP = [241, 245, 249]
-const GREEN = [21, 128, 61]
-const GREEN_BG = [220, 252, 231]
-
-/** 1618.1 → « 1 618,10 € » (espaces simples, jamais insécables). */
-export function euro(n) {
-  const [int, dec] = (Math.round((Number(n) || 0) * 100) / 100).toFixed(2).split('.')
-  const sign = int.startsWith('-') ? '-' : ''
-  const digits = int.replace('-', '').replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
-  return `${sign}${digits},${dec} €`
-}
+export { euro, frDate }
 
 const pct = (n) => `${String(Number(n) || 0).replace('.', ',')} %`
-
-/** « 2026-11-04 » ou ISO complet → « 04/11/2026 » (heure de Paris). */
-export function frDate(value) {
-  if (!value) return ''
-  const s = String(value)
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(`${s}T12:00:00Z`) : new Date(s)
-  return d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })
-}
-
-function initials(name) {
-  const words = String(name ?? '').trim().split(/\s+/).filter(Boolean)
-  if (words.length === 0) return '—'
-  if (words.length === 1) return words[0].slice(0, 3).toUpperCase()
-  return words
-    .slice(0, 3)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-}
 
 /** Totaux — mêmes règles que l'app (lib/documents.ts). */
 export function documentTotals(doc) {
@@ -77,63 +58,28 @@ export function renderDocumentPdf({ jsPDF, autoTable, doc, company, logoDataUrl,
   const isDevis = doc.kind === 'devis'
   const kind = isDevis ? 'DEVIS' : 'FACTURE'
   const t = documentTotals(doc)
-  const set = (size, style = 'normal', color = TEXT) => {
-    pdf.setFont('helvetica', style)
-    pdf.setFontSize(size)
-    pdf.setTextColor(...color)
-  }
+  const set = fontSetter(pdf)
   const lastY = () => pdf.lastAutoTable.finalY
 
   // ===== En-tête : logo + entreprise / type et numéro du document =====
-  let logoW = 0
-  if (logoDataUrl) {
-    try {
-      const props = pdf.getImageProperties(logoDataUrl)
-      const ratio = props.width / props.height || 1
-      const h = Math.min(18, 34 / ratio)
-      logoW = h * ratio
-      pdf.addImage(logoDataUrl, M, 15 + (18 - h) / 2, logoW, h)
-    } catch {
-      logoW = 0
-    }
-  }
-  if (!logoW) {
-    pdf.setFillColor(...INK)
-    pdf.roundedRect(M, 15, 16, 16, 3, 3, 'F')
-    set(initials(company.name).length > 2 ? 7 : 8.5, 'bold', [255, 255, 255])
-    pdf.text(initials(company.name), M + 8, 24.6, { align: 'center' })
-    logoW = 16
-  }
-  const nameX = M + logoW + 5
-  set(14, 'bold', INK)
-  pdf.text(pdf.splitTextToSize(company.name || '', 92)[0] ?? '', nameX, 22.5)
-  set(8, 'normal', MUTED)
-  const sub = [company.legalForm, company.siret && `SIRET ${company.siret}`].filter(Boolean).join(' · ')
-  if (sub) pdf.text(sub, nameX, 27.5)
-
-  set(21, 'bold', INK)
-  pdf.text(kind, A4_W - M, 23, { align: 'right', charSpace: 0.6 })
-  set(9.5, 'normal', MUTED)
-  pdf.text(`N° ${doc.number}`, A4_W - M, 29.5, { align: 'right' })
-
-  pdf.setDrawColor(...LINE)
-  pdf.setLineWidth(0.3)
-  pdf.line(M, 37, A4_W - M, 37)
+  drawBrandHeader(pdf, { company, logoDataUrl, title: kind, number: doc.number })
 
   // ===== Dates clés + tampon (acquittée / signé) =====
   const meta = [[`Date d'émission`, frDate(doc.issue_date)]]
   if (isDevis && doc.validity_date) meta.push(['Valable jusqu’au', frDate(doc.validity_date)])
   if (!isDevis && doc.due_date) meta.push(['Échéance', frDate(doc.due_date)])
-  meta.forEach(([label, value], idx) => {
-    const x = M + idx * 46
-    set(6.8, 'bold', MUTED)
-    pdf.text(label.toUpperCase(), x, 44, { charSpace: 0.25 })
-    set(10, 'bold', INK)
-    pdf.text(value, x, 49.5)
-  })
+  drawMetaRow(
+    pdf,
+    meta.map(([label, value], idx) => [label, value, M + idx * 46]),
+  )
   const stamp =
     !isDevis && doc.status === 'payee'
-      ? { title: 'ACQUITTÉE', line: [doc.paid_at && `le ${frDate(doc.paid_at)}`, doc.payment_method && `par ${String(doc.payment_method).toLowerCase()}`].filter(Boolean).join(' ') }
+      ? {
+          title: 'ACQUITTÉE',
+          line: [doc.paid_at && `le ${frDate(doc.paid_at)}`, doc.payment_method && `par ${String(doc.payment_method).toLowerCase()}`]
+            .filter(Boolean)
+            .join(' '),
+        }
       : isDevis && doc.status === 'signe'
         ? { title: 'SIGNÉ', line: doc.signed_at ? `le ${frDate(doc.signed_at)}` : '' }
         : null
@@ -154,29 +100,12 @@ export function renderDocumentPdf({ jsPDF, autoTable, doc, company, logoDataUrl,
 
   // ===== Émetteur / Client =====
   const cardY = 58
-  const cardW = (CONTENT_W - 6) / 2
   const client = [doc.client_first_name, doc.client_last_name].filter(Boolean).join(' ') || 'Client'
   const cityLine = [doc.postal_code, doc.city].filter(Boolean).join(' ')
-  const cards = [
+  const cardH = drawCards(pdf, cardY, [
     { label: 'ÉMETTEUR', lines: [company.name, company.address, company.phone, company.email].filter(Boolean) },
     { label: 'CLIENT', lines: [client, doc.address, cityLine, doc.phone, doc.email].filter(Boolean) },
-  ]
-  set(9, 'normal')
-  const wrapped = cards.map((c) => c.lines.flatMap((l) => pdf.splitTextToSize(String(l), cardW - 10)))
-  const cardH = Math.max(...wrapped.map((w) => w.length)) * 4.4 + 13
-  cards.forEach((c, idx) => {
-    const x = M + idx * (cardW + 6)
-    pdf.setFillColor(...PANEL)
-    pdf.setDrawColor(...LINE)
-    pdf.setLineWidth(0.25)
-    pdf.roundedRect(x, cardY, cardW, cardH, 2.5, 2.5, 'FD')
-    set(6.8, 'bold', MUTED)
-    pdf.text(c.label, x + 5, cardY + 6.5, { charSpace: 0.35 })
-    wrapped[idx].forEach((line, li) => {
-      set(9, li === 0 ? 'bold' : 'normal', li === 0 ? INK : TEXT)
-      pdf.text(line, x + 5, cardY + 12 + li * 4.4)
-    })
-  })
+  ])
 
   // ===== Articles =====
   const services = (doc.items ?? []).filter((i) => i.itemType !== 'materiel')
@@ -218,8 +147,20 @@ export function renderDocumentPdf({ jsPDF, autoTable, doc, company, logoDataUrl,
     theme: 'plain',
     head: [['Désignation', 'Qté', 'PU HT', 'TVA', 'Total HT']],
     body,
-    styles: { font: 'helvetica', fontSize: 9, textColor: TEXT, cellPadding: { top: 3.3, bottom: 3.3, left: 3.5, right: 3.5 }, valign: 'middle' },
-    headStyles: { fillColor: INK, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, cellPadding: { top: 3.2, bottom: 3.2, left: 3.5, right: 3.5 } },
+    styles: {
+      font: 'helvetica',
+      fontSize: 9,
+      textColor: TEXT,
+      cellPadding: { top: 3.3, bottom: 3.3, left: 3.5, right: 3.5 },
+      valign: 'middle',
+    },
+    headStyles: {
+      fillColor: INK,
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+      cellPadding: { top: 3.2, bottom: 3.2, left: 3.5, right: 3.5 },
+    },
     columnStyles: {
       1: { halign: 'right', cellWidth: 15 },
       2: { halign: 'right', cellWidth: 27 },
@@ -426,18 +367,7 @@ export function renderDocumentPdf({ jsPDF, autoTable, doc, company, logoDataUrl,
   }
 
   // ===== Pied de page sur chaque page : mentions légales + numéro de page =====
-  const pages = pdf.getNumberOfPages()
-  for (let p = 1; p <= pages; p++) {
-    pdf.setPage(p)
-    pdf.setDrawColor(...LINE)
-    pdf.setLineWidth(0.25)
-    pdf.line(M, A4_H - 18, A4_W - M, A4_H - 18)
-    set(6.5, 'normal', MUTED)
-    const text = (footerLines ?? []).join('  ·  ')
-    const lines = pdf.splitTextToSize(text, CONTENT_W - 24)
-    pdf.text(lines, M, A4_H - 13.5)
-    pdf.text(`${p} / ${pages}`, A4_W - M, A4_H - 13.5, { align: 'right' })
-  }
+  drawFooters(pdf, footerLines)
 
   return pdf
 }

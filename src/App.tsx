@@ -22,6 +22,7 @@ const Login = React.lazy(() => import('@/pages/Login'))
 const NoTeamYet = React.lazy(() => import('@/pages/NoTeamYet'))
 const NotFound = React.lazy(() => import('@/pages/NotFound'))
 const RapportCreate = React.lazy(() => import('@/pages/RapportCreate'))
+const RapportEdit = React.lazy(() => import('@/pages/RapportEdit'))
 const ResetPassword = React.lazy(() => import('@/pages/ResetPassword'))
 const TeamPayment = React.lazy(() => import('@/pages/TeamPayment'))
 const VerifyEmail = React.lazy(() => import('@/pages/VerifyEmail'))
@@ -104,6 +105,7 @@ function AppRoutes() {
             <Route path="/devis/:id/modifier" element={<DevisEdit />} />
             <Route path="/factures/:id/modifier" element={<FactureEdit />} />
             <Route path="/rapports/nouveau" element={<RapportCreate />} />
+            <Route path="/rapports/:id" element={<RapportEdit />} />
 
             <Route path="/reglages" element={<Settings />} />
             <Route path="/reglages/compte" element={<AccountSettings />} />

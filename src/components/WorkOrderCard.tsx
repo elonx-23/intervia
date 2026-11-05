@@ -19,7 +19,7 @@ const DOT: Record<Tone, string> = {
 }
 
 // « Paris 6e » / « Paris 1er » d'après le code postal, sinon la ville.
-function placeName(i: Intervention) {
+export function placeName(i: Pick<Intervention, 'postal_code' | 'city' | 'address'>) {
   const cp = String(i.postal_code ?? '').trim()
   if (/^75(0\d{2}|116)$/.test(cp)) {
     const n = cp === '75116' ? 16 : Number(cp.slice(3))

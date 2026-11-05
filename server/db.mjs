@@ -8,6 +8,40 @@ const dir = path.dirname(fileURLToPath(import.meta.url))
 // Railway monté sur /data) en production — sans elle, la base vivrait sur
 // le système de fichiers éphémère du conteneur et serait perdue à chaque
 // redéploiement. Par défaut (dev local), inchangé : à côté de ce fichier.
+// Rapport d'intervention : un document à part entière, comme un devis ou une
+// facture (numéro, client, horaires, facture liée, photos, compte-rendu).
+// L'intervention est facultative : un rapport peut partir de la facture d'un
+// client qui n'a pas de fiche. Les coordonnées sont recopiées à la création
+// puis modifiables, comme sur un devis.
+const REPORTS_COLUMNS = `
+    id TEXT PRIMARY KEY,
+    intervention_id TEXT REFERENCES interventions(id),
+    team_id TEXT NOT NULL REFERENCES teams(id),
+    technicien_id TEXT REFERENCES technicians(id),
+    notes TEXT NOT NULL DEFAULT '',
+    created_by TEXT,
+    created_at TEXT NOT NULL,
+    arrival_at TEXT,
+    number TEXT,
+    document_id TEXT,
+    title TEXT NOT NULL DEFAULT '',
+    extra TEXT NOT NULL DEFAULT '',
+    motifs TEXT NOT NULL DEFAULT '[]',
+    end_at TEXT,
+    technicien_name TEXT NOT NULL DEFAULT '',
+    created_by_name TEXT NOT NULL DEFAULT '',
+    client_first_name TEXT NOT NULL DEFAULT '',
+    client_last_name TEXT NOT NULL DEFAULT '',
+    phone TEXT,
+    email TEXT,
+    address TEXT,
+    postal_code TEXT,
+    city TEXT,
+    intervention_type TEXT NOT NULL DEFAULT '',
+    photos TEXT NOT NULL DEFAULT '[]',
+    updated_at TEXT,
+    ai_at TEXT`
+
 export const db = new DatabaseSync(process.env.DB_PATH || path.join(dir, 'pse-gestion.db'))
 
 db.exec(`
@@ -186,19 +220,11 @@ db.exec(`
     PRIMARY KEY (user_id, type)
   );
 
-  -- Rapport d'intervention : document généré par le technicien à partir
-  -- d'une fiche (date/heure/description reprises de l'intervention elle-même,
-  -- voir server/routes/reports.mjs), avec un texte libre en plus — le PDF
-  -- est recomposé côté client à chaque téléchargement (comme les devis/
-  -- factures), cette table ne garde que la trace/le texte, pas le PDF lui-même.
+  -- Rapport d'intervention (voir REPORTS_COLUMNS et server/reports.mjs) : le
+  -- PDF est recomposé par l'app à chaque affichage, comme les devis/factures ;
+  -- la table garde le contenu, pas le PDF.
   CREATE TABLE IF NOT EXISTS intervention_reports (
-    id TEXT PRIMARY KEY,
-    intervention_id TEXT NOT NULL REFERENCES interventions(id),
-    team_id TEXT NOT NULL REFERENCES teams(id),
-    technicien_id TEXT REFERENCES technicians(id),
-    notes TEXT NOT NULL DEFAULT '',
-    created_by TEXT,
-    created_at TEXT NOT NULL
+${REPORTS_COLUMNS}
   );
 
   -- Journal de chaque tentative de connexion (code technicien ET
@@ -314,6 +340,29 @@ ensureColumn('calls', 'intervention_id', 'TEXT')
 ensureColumn('calls', 'provider_call_id', 'TEXT')
 ensureColumn('calls', 'summary', 'TEXT')
 ensureColumn('intervention_reports', 'arrival_at', 'TEXT')
+// Rapports d'avant (intervention obligatoire, texte seul) : table reconstruite
+// avec toutes les colonnes ; les lignes existantes sont gardées telles quelles
+// (numéro et coordonnées complétés au démarrage, voir server/reports.mjs).
+if (db.prepare('PRAGMA table_info(intervention_reports)').all().find((c) => c.name === 'intervention_id')?.notnull) {
+  db.exec('PRAGMA foreign_keys = OFF')
+  try {
+    db.exec(`
+      BEGIN;
+      CREATE TABLE intervention_reports_v2 (${REPORTS_COLUMNS});
+      INSERT INTO intervention_reports_v2 (id, intervention_id, team_id, technicien_id, notes, created_by, created_at, arrival_at)
+        SELECT id, intervention_id, team_id, technicien_id, notes, created_by, created_at, arrival_at FROM intervention_reports;
+      DROP TABLE intervention_reports;
+      ALTER TABLE intervention_reports_v2 RENAME TO intervention_reports;
+      COMMIT;
+    `)
+  } catch (e) {
+    db.exec('ROLLBACK')
+    throw e
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON')
+  }
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_reports_team ON intervention_reports (team_id, created_at)')
 ensureColumn('calls', 'analyzed_at', 'TEXT')
 ensureColumn('telephony_orders', 'last_pay_attempt_at', 'TEXT')
 ensureColumn('telephony_orders', 'paid_reported_at', 'TEXT')

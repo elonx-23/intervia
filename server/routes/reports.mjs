@@ -1,62 +1,192 @@
-import { companyForTeam } from '../company.mjs'
 import { Router } from 'express'
 
-import { db, getSetting, now, uuid } from '../db.mjs'
+import { aiAvailable, draftReport } from '../aiReport.mjs'
 import { requireAuth } from '../auth.mjs'
-import { sendMail } from '../mailer.mjs'
-import { generateReportPdfBuffer } from '../pdf.mjs'
+import { companyForTeam } from '../company.mjs'
+import { db, now, uuid } from '../db.mjs'
+import { emailsForDocument, finishEmail, trackingPixel } from '../emailTracking.mjs'
 import { wrapEmail } from '../emailTemplates.mjs'
+import { broadcast } from '../events.mjs'
+import { sendMail } from '../mailer.mjs'
 import { rateLimit } from '../rateLimit.mjs'
-import { draftReport } from '../aiReport.mjs'
+import { documentForIntervention, documentToApi, insertReport, newReportFields, reportToApi, starterNotes } from '../reports.mjs'
 
+// Rapports d'intervention : création (depuis une fiche, un devis ou une
+// facture), modification, rédaction par l'IA, envoi par email. Ouverts comme
+// un devis ou une facture (Modifier · Aperçu · Historique).
 export const reportsRouter = Router()
 reportsRouter.use(requireAuth)
 
-// Même limite que l'envoi de devis/factures (documents.mjs) — un vrai email
-// externe avec pièce jointe PDF, pas juste une lecture de données.
-const emailLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30 })
-
-// Un technicien ne peut faire un rapport que sur une fiche qui lui est/était
-// assignée dans son équipe active ; l'admin peut en faire sur n'importe
-// quelle fiche de l'équipe — même contrôle d'accès que le reste (fiches,
-// devis/factures).
+// Mêmes règles d'accès que les fiches et les documents : l'admin voit tout
+// dans son équipe, un technicien ses fiches et ses propres rapports.
 function canAccessIntervention(caller, intervention) {
   if (!intervention || intervention.team_id !== caller.team_id) return false
   if (caller.role === 'admin') return true
   return intervention.technicien_id === caller.technicien_id
 }
 
-function technicienNameFor(intervention, caller) {
-  const t = intervention.technicien_id
-    ? db.prepare('SELECT first_name, last_name FROM technicians WHERE id = ?').get(intervention.technicien_id)
-    : caller.technicien_id
-      ? db.prepare('SELECT first_name, last_name FROM technicians WHERE id = ?').get(caller.technicien_id)
-      : null
-  return t ? `${t.first_name} ${t.last_name}`.trim() : 'Technicien'
+function canAccessDocument(caller, sessionId, doc) {
+  if (!doc || doc.team_id !== caller.team_id) return false
+  if (caller.role === 'admin' || doc.created_by === sessionId) return true
+  const i = doc.intervention_id ? db.prepare('SELECT technicien_id FROM interventions WHERE id = ?').get(doc.intervention_id) : null
+  return Boolean(i && i.technicien_id === caller.technicien_id)
 }
+
+const canAccessReport = (caller, r) =>
+  Boolean(r && r.team_id === caller.team_id && (caller.role === 'admin' || r.technicien_id === caller.technicien_id))
+
+const byId = (id) => db.prepare('SELECT * FROM intervention_reports WHERE id = ?').get(id)
+const loadReport = (req) => {
+  const row = byId(req.params.id)
+  return canAccessReport(req.caller, row) ? row : null
+}
+
+// Rapport complet pour l'éditeur : document lié (lignes, totaux), fiche,
+// emails envoyés (historique) et disponibilité de l'IA.
+function fullReport(row) {
+  const r = reportToApi(row)
+  const doc = r.document_id ? db.prepare('SELECT * FROM documents WHERE id = ? AND deleted_at IS NULL').get(r.document_id) : null
+  const intervention = r.intervention_id
+    ? db
+        .prepare('SELECT id, reference, status, description, floor, access_codes, created_at FROM interventions WHERE id = ?')
+        .get(r.intervention_id)
+    : null
+  return {
+    ...r,
+    document: documentToApi(doc),
+    intervention: intervention ?? null,
+    emails: emailsForDocument(r.id),
+    ai_available: aiAvailable(r.team_id),
+  }
+}
+
+const changed = (row) => broadcast('reports_changed', { id: row.id }, row.team_id)
 
 const isoOrNull = (v) => {
   const d = v ? new Date(v) : null
   return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null
 }
 
-// Rédaction du compte-rendu par l'IA (fiche + heure d'arrivée + facture +
-// appel) — rien n'est enregistré : le texte revient dans le formulaire, à
-// relire et modifier avant de générer le rapport.
-const aiLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 40 })
-reportsRouter.post('/ai-draft', aiLimiter, async (req, res) => {
-  const intervention = db.prepare('SELECT * FROM interventions WHERE id = ?').get(req.body?.interventionId)
-  if (!canAccessIntervention(req.caller, intervention)) return res.status(404).json({ error: 'Intervention introuvable' })
-  try {
-    res.json(
-      await draftReport({
-        teamId: req.caller.team_id,
-        interventionId: intervention.id,
-        arrivalAt: isoOrNull(req.body?.arrivalAt),
-        technicienName: technicienNameFor(intervention, req.caller),
-        extraNotes: String(req.body?.notes ?? '').slice(0, 4000),
-      }),
+// Liste (onglet Factures).
+reportsRouter.get('/', (req, res) => {
+  const rows =
+    req.caller.role === 'admin'
+      ? db.prepare('SELECT * FROM intervention_reports WHERE team_id = ? ORDER BY created_at DESC').all(req.caller.team_id)
+      : db
+          .prepare('SELECT * FROM intervention_reports WHERE team_id = ? AND technicien_id = ? ORDER BY created_at DESC')
+          .all(req.caller.team_id, req.caller.technicien_id)
+  res.json(rows.map(reportToApi))
+})
+
+// Nouveau rapport depuis une fiche et/ou un devis / une facture : client,
+// adresse, technicien, heures d'arrivée et de fin, photos et lignes de la
+// facture sont repris ; le compte-rendu part d'une première version.
+reportsRouter.post('/', (req, res) => {
+  const { interventionId, documentId } = req.body ?? {}
+  let doc = documentId ? db.prepare('SELECT * FROM documents WHERE id = ? AND deleted_at IS NULL').get(documentId) : null
+  if (documentId && !canAccessDocument(req.caller, req.sessionId, doc)) return res.status(404).json({ error: 'Document introuvable' })
+  const interventionRef = interventionId || doc?.intervention_id
+  let intervention = interventionRef ? db.prepare('SELECT * FROM interventions WHERE id = ?').get(interventionRef) : null
+  if (interventionId && !canAccessIntervention(req.caller, intervention)) return res.status(404).json({ error: 'Intervention introuvable' })
+  if (!canAccessIntervention(req.caller, intervention)) intervention = null
+  if (!doc && intervention) doc = documentForIntervention(intervention.id)
+  if (!intervention && !doc) return res.status(400).json({ error: 'Choisis une intervention, un devis ou une facture.' })
+
+  const fields = newReportFields({ intervention, document: doc, caller: req.caller })
+  const id = insertReport(req.caller.team_id, req.caller, fields, starterNotes({ intervention, document: doc, fields }))
+  const row = byId(id)
+  changed(row)
+  res.json(fullReport(row))
+})
+
+reportsRouter.get('/:id', (req, res) => {
+  const row = loadReport(req)
+  if (!row) return res.status(404).json({ error: 'Rapport introuvable' })
+  res.json(fullReport(row))
+})
+
+// Champs modifiables (longueur maximale).
+const TEXT_FIELDS = {
+  title: 200,
+  extra: 4000,
+  notes: 20000,
+  technicien_name: 120,
+  client_first_name: 120,
+  client_last_name: 120,
+  phone: 40,
+  email: 200,
+  address: 300,
+  postal_code: 12,
+  city: 120,
+  intervention_type: 80,
+}
+
+reportsRouter.patch('/:id', (req, res) => {
+  const row = loadReport(req)
+  if (!row) return res.status(404).json({ error: 'Rapport introuvable' })
+  const b = req.body ?? {}
+  const sets = []
+  const values = []
+  for (const [key, max] of Object.entries(TEXT_FIELDS)) {
+    if (b[key] === undefined) continue
+    sets.push(`${key} = ?`)
+    values.push(String(b[key] ?? '').slice(0, max))
+  }
+  for (const key of ['arrival_at', 'end_at']) {
+    if (b[key] === undefined) continue
+    sets.push(`${key} = ?`)
+    values.push(isoOrNull(b[key]))
+  }
+  // Photos : uniquement des fichiers envoyés dans l'app (/uploads/…).
+  if (Array.isArray(b.photos)) {
+    sets.push('photos = ?')
+    values.push(
+      JSON.stringify(b.photos.filter((p) => typeof p === 'string' && /^\/uploads\/[^?#\s]+$/.test(p) && !p.includes('..')).slice(0, 30)),
     )
+  }
+  if (Array.isArray(b.motifs)) {
+    sets.push('motifs = ?')
+    values.push(JSON.stringify(b.motifs.map((m) => String(m).slice(0, 60)).slice(0, 10)))
+  }
+  if (sets.length) {
+    sets.push('updated_at = ?')
+    values.push(now())
+    db.prepare(`UPDATE intervention_reports SET ${sets.join(', ')} WHERE id = ?`).run(...values, row.id)
+    changed(row)
+  }
+  res.json(fullReport(byId(row.id)))
+})
+
+reportsRouter.delete('/:id', (req, res) => {
+  const row = loadReport(req)
+  if (!row) return res.status(404).json({ error: 'Rapport introuvable' })
+  db.prepare('DELETE FROM intervention_reports WHERE id = ?').run(row.id)
+  db.prepare('DELETE FROM document_emails WHERE document_id = ?').run(row.id)
+  changed(row)
+  res.json({ ok: true })
+})
+
+// Rédaction par l'IA (fiche, heures, facture, appel, photos + éléments
+// ajoutés) : le titre, le compte-rendu et les motifs sont enregistrés.
+const aiLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 40 })
+reportsRouter.post('/:id/ai', aiLimiter, async (req, res) => {
+  const row = loadReport(req)
+  if (!row) return res.status(404).json({ error: 'Rapport introuvable' })
+  const extra = String(req.body?.extra ?? row.extra ?? '').slice(0, 4000)
+  try {
+    const draft = await draftReport({ teamId: row.team_id, report: { ...reportToApi(row), extra }, extra })
+    const at = now()
+    db.prepare('UPDATE intervention_reports SET title = ?, notes = ?, motifs = ?, extra = ?, ai_at = ?, updated_at = ? WHERE id = ?').run(
+      draft.title || row.title,
+      draft.notes,
+      JSON.stringify(draft.motifs),
+      extra,
+      at,
+      at,
+      row.id,
+    )
+    changed(row)
+    res.json(fullReport(byId(row.id)))
   } catch (e) {
     if (e.status) return res.status(e.status).json({ error: e.message })
     console.log(`[rapport ia] ${e.message}`)
@@ -64,109 +194,55 @@ reportsRouter.post('/ai-draft', aiLimiter, async (req, res) => {
   }
 })
 
-reportsRouter.post('/', (req, res) => {
-  const { interventionId, notes } = req.body ?? {}
-  const arrivalAt = isoOrNull(req.body?.arrivalAt)
-  const intervention = db.prepare('SELECT * FROM interventions WHERE id = ?').get(interventionId)
-  if (!canAccessIntervention(req.caller, intervention)) {
-    return res.status(404).json({ error: 'Intervention introuvable' })
-  }
-
-  const id = uuid()
-  const createdAt = now()
-  db.prepare(
-    'INSERT INTO intervention_reports (id, intervention_id, team_id, technicien_id, notes, arrival_at, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-  ).run(id, interventionId, req.caller.team_id, req.caller.technicien_id, notes ?? '', arrivalAt, req.sessionId, createdAt)
-
-  res.json({ id, intervention_id: interventionId, team_id: req.caller.team_id, technicien_id: req.caller.technicien_id, notes: notes ?? '', created_at: createdAt })
-})
-
-// Liste pour l'onglet Factures (affichés ensemble, teinte différente côté
-// client) — jointure directe avec l'intervention pour tout avoir en un seul
-// aller-retour (regénérer le PDF n'a pas besoin d'un deuxième appel).
-reportsRouter.get('/', (req, res) => {
-  const rows =
-    req.caller.role === 'admin'
-      ? db
-          .prepare(
-            `SELECT r.*, i.reference AS i_reference, i.client_first_name AS i_client_first_name,
-                    i.client_last_name AS i_client_last_name, i.address AS i_address,
-                    i.intervention_type AS i_intervention_type, i.description AS i_description,
-                    i.created_at AS i_created_at, i.started_at AS i_started_at, i.completed_at AS i_completed_at
-             FROM intervention_reports r JOIN interventions i ON i.id = r.intervention_id
-             WHERE r.team_id = ? ORDER BY r.created_at DESC`,
-          )
-          .all(req.caller.team_id)
-      : db
-          .prepare(
-            `SELECT r.*, i.reference AS i_reference, i.client_first_name AS i_client_first_name,
-                    i.client_last_name AS i_client_last_name, i.address AS i_address,
-                    i.intervention_type AS i_intervention_type, i.description AS i_description,
-                    i.created_at AS i_created_at, i.started_at AS i_started_at, i.completed_at AS i_completed_at
-             FROM intervention_reports r JOIN interventions i ON i.id = r.intervention_id
-             WHERE r.team_id = ? AND r.technicien_id = ? ORDER BY r.created_at DESC`,
-          )
-          .all(req.caller.team_id, req.caller.technicien_id)
-  res.json(rows)
-})
-
-reportsRouter.get('/by-intervention/:interventionId', (req, res) => {
-  const intervention = db.prepare('SELECT * FROM interventions WHERE id = ?').get(req.params.interventionId)
-  if (!canAccessIntervention(req.caller, intervention)) {
-    return res.status(404).json({ error: 'Intervention introuvable' })
-  }
-  const rows = db
-    .prepare('SELECT * FROM intervention_reports WHERE intervention_id = ? ORDER BY created_at DESC')
-    .all(req.params.interventionId)
-  res.json(rows)
-})
-
-// `greeting` (nom client) vient de la fiche intervention, jamais digne de
-// confiance dans un contexte HTML brut — même précaution que documents.mjs.
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 }
 
-// Aucune adresse email n'est stockée sur une intervention (contrairement à
-// un devis/facture) — elle est donc saisie au moment de l'envoi plutôt que
-// relue en base, sans être conservée après coup.
+// Envoi par email : le PDF joint est celui de l'aperçu (composé par l'app,
+// photos comprises) ; l'envoi et son ouverture apparaissent dans l'historique.
+const emailLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30 })
 reportsRouter.post('/:id/email', emailLimiter, async (req, res) => {
+  const row = loadReport(req)
+  if (!row) return res.status(404).json({ error: 'Rapport introuvable' })
   const email = String(req.body?.email ?? '').trim()
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: 'Adresse email invalide.' })
-  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Adresse email invalide.' })
+  const pdf = Buffer.from(String(req.body?.pdf ?? ''), 'base64')
+  if (pdf.length < 500 || pdf.subarray(0, 5).toString('latin1') !== '%PDF-')
+    return res.status(400).json({ error: 'PDF du rapport invalide.' })
 
-  const report = db.prepare('SELECT * FROM intervention_reports WHERE id = ?').get(req.params.id)
-  if (!report) return res.status(404).json({ error: 'Rapport introuvable' })
-  const intervention = db.prepare('SELECT * FROM interventions WHERE id = ?').get(report.intervention_id)
-  if (!canAccessIntervention(req.caller, intervention)) {
-    return res.status(404).json({ error: 'Rapport introuvable' })
-  }
-
-  const technicien = intervention.technicien_id
-    ? db.prepare('SELECT first_name, last_name FROM technicians WHERE id = ?').get(intervention.technicien_id)
-    : null
-  const technicienName = technicien ? `${technicien.first_name} ${technicien.last_name}`.trim() : 'Technicien'
-  const eventDate = intervention.completed_at ?? intervention.started_at ?? intervention.created_at
-  const client = [intervention.client_first_name, intervention.client_last_name].filter(Boolean).join(' ') || 'Client'
-
+  const company = companyForTeam(row.team_id)
+  const emailId = uuid()
+  db.prepare(
+    "INSERT INTO document_emails (id, document_id, team_id, kind, to_email, status, sent_at) VALUES (?, ?, ?, 'envoi', ?, 'envoi_en_cours', ?)",
+  ).run(emailId, row.id, row.team_id, email, now())
+  const baseUrl = `${String(req.get('x-forwarded-proto') ?? req.protocol)
+    .split(',')[0]
+    .trim()}://${req.get('host')}`
+  const client = [row.client_first_name, row.client_last_name].filter(Boolean).join(' ')
+  const when = row.arrival_at ?? row.end_at ?? row.created_at
   try {
-    const pdfBuffer = generateReportPdfBuffer({ report, intervention, technicienName })
     await sendMail({
       to: email,
-      fromName: companyForTeam(intervention.team_id).name,
-      subject: `Rapport d'intervention — ${intervention.reference}`,
+      fromName: company.name,
+      subject: `Rapport d'intervention ${row.number}${company.name ? ` — ${company.name}` : ''}`,
       html: wrapEmail({
-        brandName: companyForTeam(intervention.team_id).name,
-        preheader: `Voici le rapport d'intervention ${intervention.reference}.`,
+        brandName: company.name,
+        preheader: `Rapport de l'intervention du ${new Date(when).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}.`,
         bodyHtml: `
-          <p>Bonjour ${escapeHtml(client)},</p>
-          <p>Voici le rapport de l'intervention <strong>${escapeHtml(intervention.reference)}</strong>, réalisée le ${new Date(eventDate).toLocaleDateString('fr-FR')}, jointe à cet email au format PDF.</p>`,
+          <p>Bonjour${client ? ` ${escapeHtml(client)}` : ''},</p>
+          <p>Veuillez trouver ci-joint le rapport de l'intervention réalisée le ${new Date(when).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}${row.title ? ` (${escapeHtml(row.title)})` : ''}.</p>
+          <p>Ce document peut être transmis à votre assurance ou au propriétaire du logement.</p>
+          ${trackingPixel(baseUrl, emailId)}`,
       }),
-      attachments: [{ filename: `rapport-${intervention.reference}.pdf`, content: pdfBuffer }],
+      attachments: [{ filename: `Rapport-${row.number}.pdf`, content: pdf }],
     })
-    res.json({ ok: true })
+    finishEmail(emailId)
+    if (!row.email) db.prepare('UPDATE intervention_reports SET email = ? WHERE id = ?').run(email, row.id)
+    changed(row)
+    res.json(fullReport(byId(row.id)))
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    finishEmail(emailId, e)
+    console.log(`[rapport email] ${e.message}`)
+    res.status(502).json({ error: "L'envoi a échoué, réessaie dans un instant." })
   }
 })

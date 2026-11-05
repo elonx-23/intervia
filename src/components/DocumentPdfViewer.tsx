@@ -19,6 +19,13 @@ const clamp = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
 type PdfDoc = Awaited<ReturnType<typeof import('pdfjs-dist').getDocument>['promise']>
 
 export function DocumentPdfViewer({ doc }: { doc: PseDocument }) {
+  const load = React.useCallback(async () => (await import('@/lib/pdf')).generateDocumentPdf(doc), [doc])
+  return <PdfViewer load={load} />
+}
+
+// Le même lecteur pour tout PDF de l'app (devis, facture, rapport) : `load`
+// fabrique le PDF (mémorisé par l'appelant, il est rejoué à chaque changement).
+export function PdfViewer({ load }: { load: () => Promise<{ output(type: 'arraybuffer'): ArrayBuffer }> }) {
   const scrollerRef = React.useRef<HTMLDivElement>(null)
   const contentRef = React.useRef<HTMLDivElement>(null)
   const pdfRef = React.useRef<PdfDoc | null>(null)
@@ -64,8 +71,7 @@ export function DocumentPdfViewer({ doc }: { doc: PseDocument }) {
     zoomRef.current = 1
     setZoom(1)
     ;(async () => {
-      const { generateDocumentPdf } = await import('@/lib/pdf')
-      const pdf = await generateDocumentPdf(doc)
+      const pdf = await load()
       const pdfjsLib = await import('pdfjs-dist')
       pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
       const pdfDoc = await pdfjsLib.getDocument({ data: pdf.output('arraybuffer') as ArrayBuffer }).promise
@@ -77,7 +83,7 @@ export function DocumentPdfViewer({ doc }: { doc: PseDocument }) {
     return () => {
       cancelled = true
     }
-  }, [doc, draw])
+  }, [load, draw])
 
   // Redessine en haute résolution une fois le geste terminé.
   React.useEffect(() => {

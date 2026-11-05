@@ -3,6 +3,8 @@ import autoTable from 'jspdf-autotable'
 
 import { COMPANY, legalClauses, legalFooterLines } from '@/lib/company'
 import { renderDocumentPdf } from '../../shared/documentPdf.mjs'
+import { renderReportPdf } from '../../shared/reportPdf.mjs'
+import type { ReportFull } from '@/lib/reports'
 import type { PseDocument } from '@/lib/documents'
 import type { Intervention } from '@/lib/interventions'
 
@@ -95,12 +97,8 @@ export async function getDocumentPdfBlobUrl(doc: PseDocument): Promise<string> {
   return pdf.output('bloburl') as unknown as string
 }
 
-export async function downloadRelevePdf(
-  technicienName: string,
-  from: string,
-  to: string,
-  interventions: Intervention[],
-) {
+// Jamais le nom du technicien ni du gérant sur un document : seule l'entreprise.
+export async function downloadRelevePdf(from: string, to: string, interventions: Intervention[]) {
   const pdf = new jsPDF()
   const pageWidth = pdf.internal.pageSize.getWidth()
   const margin = 14
@@ -117,7 +115,7 @@ export async function downloadRelevePdf(
   pdf.setFont('helvetica', 'normal')
   pdf.setFontSize(9)
   pdf.setTextColor(...GRAY_TEXT)
-  pdf.text(`${technicienName} — du ${from} au ${to}`, margin, 46)
+  pdf.text(`Du ${from} au ${to}`, margin, 46)
 
   autoTable(pdf, {
     startY: 54,
@@ -150,123 +148,63 @@ export async function downloadRelevePdf(
   pdf.save(`releve-${from}-${to}.pdf`)
 }
 
-export interface ReportPdfInput {
-  reference: string
-  clientFirstName: string
-  clientLastName: string
-  address: string | null
-  interventionType: string
-  description: string | null
-  eventDate: string
-  // Heure d'arrivée du technicien et fin d'intervention, si connues.
-  arrivalAt?: string | null
-  completedAt?: string | null
-}
+// ---------- Rapport d'intervention (shared/reportPdf.mjs) ----------
 
-// Texte long du rapport : passe à la page suivante quand il le faut, et met en
-// gras les titres de section (« Travaux réalisés : » seul sur sa ligne).
-function writeReportText(pdf: jsPDF, text: string, x: number, startY: number, width: number) {
-  const pageHeight = pdf.internal.pageSize.getHeight()
-  let y = startY
-  for (const raw of text.split('\n')) {
-    const isTitle = /^[^-•\s].{1,60}:\s*$/.test(raw.trim())
-    if (!raw.trim()) {
-      y += 2.5
-      continue
-    }
-    pdf.setFont('helvetica', isTitle ? 'bold' : 'normal')
-    pdf.setFontSize(isTitle ? 9.5 : 9)
-    pdf.setTextColor(...(isTitle ? DARK : ([60, 60, 65] as [number, number, number])))
-    if (isTitle) y += 2
-    for (const line of pdf.splitTextToSize(raw.trim(), width) as string[]) {
-      if (y > pageHeight - 24) {
-        pdf.addPage()
-        y = 20
-      }
-      pdf.text(line, x, y)
-      y += 4.6
-    }
+type PdfPhoto = { dataUrl: string; width: number; height: number }
+
+// Photo → JPEG réduit (1400 px au plus) : PDF léger, et lisible par jsPDF quel
+// que soit le format d'origine (HEIC, PNG, WEBP…). Gardée en mémoire : l'aperçu
+// et le partage la réutilisent sans la recharger.
+const photoCache = new Map<string, Promise<PdfPhoto | null>>()
+function photoForPdf(url: string) {
+  if (!photoCache.has(url)) {
+    photoCache.set(
+      url,
+      (async () => {
+        try {
+          const img = new Image()
+          img.src = url
+          await img.decode()
+          const scale = Math.min(1, 1400 / Math.max(img.naturalWidth, img.naturalHeight))
+          const w = Math.max(1, Math.round(img.naturalWidth * scale))
+          const h = Math.max(1, Math.round(img.naturalHeight * scale))
+          const canvas = document.createElement('canvas')
+          canvas.width = w
+          canvas.height = h
+          const ctx = canvas.getContext('2d')
+          if (!ctx) return null
+          ctx.fillStyle = '#ffffff'
+          ctx.fillRect(0, 0, w, h)
+          ctx.drawImage(img, 0, 0, w, h)
+          return { dataUrl: canvas.toDataURL('image/jpeg', 0.82), width: w, height: h }
+        } catch {
+          photoCache.delete(url)
+          return null
+        }
+      })(),
+    )
   }
-  return y
+  return photoCache.get(url)!
 }
 
-
-// Rapport d'intervention : date/heure et description reprises de la fiche
-// elle-même (jamais ressaisies), plus le texte libre ajouté par le
-// technicien — même habillage sobre (logo + texte noir) que les devis/
-// factures pour rester cohérent visuellement. Prend une forme allégée (pas
-// une `Intervention` complète) : appelé à la fois juste après création
-// (où on a la fiche entière) et depuis la liste Factures (où seuls les
-// champs joints par le serveur sont disponibles).
-export async function downloadReportPdf(technicienName: string, data: ReportPdfInput, notes: string) {
-  const pdf = new jsPDF()
-  const pageWidth = pdf.internal.pageSize.getWidth()
-  const margin = 14
-
-  drawLogo(pdf, margin, 14, null, companyInitials(COMPANY.name))
-  pdf.setTextColor(...DARK)
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(15)
-  pdf.text(COMPANY.name, margin + 18, 23)
-
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(19)
-  pdf.text("Rapport d'intervention", margin, 42)
-
-  const client = [data.clientFirstName, data.clientLastName].filter(Boolean).join(' ') || '-'
-
-  const infoRows: [string, string][] = [
-    ['Référence', data.reference],
-    ['Date', new Date(data.arrivalAt ?? data.eventDate).toLocaleDateString('fr-FR')],
-    ...(data.arrivalAt
-      ? ([["Heure d'arrivée", new Date(data.arrivalAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })]] as [string, string][])
-      : ([['Heure', new Date(data.eventDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })]] as [string, string][])),
-    ...(data.completedAt
-      ? ([["Fin d'intervention", new Date(data.completedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })]] as [string, string][])
-      : []),
-    ['Technicien', technicienName],
-    ['Client', client],
-    ['Adresse', data.address ?? '-'],
-    ["Type d'intervention", data.interventionType || '-'],
-  ]
-
-  autoTable(pdf, {
-    startY: 50,
-    margin: { left: margin, right: margin },
-    body: infoRows,
-    styles: { fontSize: 9.5, cellPadding: 3, textColor: DARK, lineColor: GRAY_LINE, lineWidth: 0.2 },
-    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 } },
+export async function generateReportPdf(report: ReportFull): Promise<jsPDF> {
+  const [logoDataUrl, photos] = await Promise.all([
+    COMPANY.logoUrl ? loadImageAsDataUrl(COMPANY.logoUrl) : Promise.resolve(null),
+    Promise.all(report.photos.slice(0, 12).map(photoForPdf)),
+  ])
+  return renderReportPdf({
+    jsPDF,
+    autoTable,
+    report,
+    document: report.document,
+    company: COMPANY,
+    logoDataUrl,
+    photos: photos.filter((p): p is PdfPhoto => p !== null),
+    footerLines: legalFooterLines(),
   })
-  let y = (pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10
+}
 
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(10)
-  pdf.setTextColor(...DARK)
-  pdf.text('Description', margin, y)
-  y += 5
-  pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(9)
-  pdf.setTextColor(...GRAY_TEXT)
-  const descLines = pdf.splitTextToSize(data.description || 'Aucune description.', pageWidth - margin * 2)
-  pdf.text(descLines, margin, y)
-  y += descLines.length * 4.5 + 10
-
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(10)
-  pdf.setTextColor(...DARK)
-  pdf.text("Compte-rendu de l'intervention", margin, y)
-  y += 6
-  writeReportText(pdf, notes.trim() || 'Aucune remarque.', margin, y, pageWidth - margin * 2)
-
-  // Pied de page légal sur chaque page.
-  const footerY = pdf.internal.pageSize.getHeight() - 14
-  for (let p = 1; p <= pdf.getNumberOfPages(); p++) {
-    pdf.setPage(p)
-    pdf.setFont('helvetica', 'normal')
-    pdf.setFontSize(7)
-    pdf.setTextColor(...GRAY_TEXT)
-    pdf.text(legalFooterLines().join(' — '), pageWidth / 2, footerY, { align: 'center', maxWidth: pageWidth - margin * 2 })
-  }
-
-  pdf.save(`rapport-${data.reference}.pdf`)
+export async function downloadReportPdf(report: ReportFull) {
+  const pdf = await generateReportPdf(report)
+  pdf.save(`Rapport-${report.number}.pdf`)
 }

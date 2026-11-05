@@ -25,9 +25,8 @@ import {
   type PseDocument,
 } from '@/lib/documents'
 import { friendlyError } from '@/lib/errors'
-import { listReports, type InterventionReportListItem } from '@/lib/reports'
+import { listReports, reportClientName, type Report } from '@/lib/reports'
 import { normalizeSearch } from '@/lib/utils'
-import { ReportActionsDialog } from '@/components/ReportActionsDialog'
 
 function matchesSearch(d: PseDocument, query: string) {
   const q = normalizeSearch(query.trim())
@@ -59,12 +58,11 @@ function matchesFactureFilter(d: PseDocument, filter: FactureFilter) {
 export function Documents({ kind }: { kind: DocumentKind }) {
   const { session } = useAuth()
   const [docs, setDocs] = React.useState<PseDocument[] | null>(null)
-  const [reports, setReports] = React.useState<InterventionReportListItem[]>([])
+  const [reports, setReports] = React.useState<Report[]>([])
   const [error, setError] = React.useState<string | null>(null)
   const [filter, setFilter] = React.useState<DevisFilter | FactureFilter>('toutes')
   const [searchOpen, setSearchOpen] = React.useState(false)
   const [search, setSearch] = React.useState('')
-  const [openReport, setOpenReport] = React.useState<InterventionReportListItem | null>(null)
 
   const isAdmin = session?.role === 'admin'
 
@@ -155,11 +153,11 @@ export function Documents({ kind }: { kind: DocumentKind }) {
     const q = normalizeSearch(search.trim())
     if (!q) return reports
     return reports.filter((r) =>
-      normalizeSearch([r.i_client_first_name, r.i_client_last_name, r.i_reference].join(' ')).includes(q),
+      normalizeSearch([reportClientName(r), r.number, r.title, r.city ?? '', r.address ?? ''].join(' ')).includes(q),
     )
   }, [reports, filter, search])
 
-  type Entry = { type: 'facture'; doc: PseDocument; date: string } | { type: 'rapport'; report: InterventionReportListItem; date: string }
+  type Entry = { type: 'facture'; doc: PseDocument; date: string } | { type: 'rapport'; report: Report; date: string }
 
   // Regroupées par année (la plus récente en premier), avec le total TTC de
   // chaque groupe affiché dans son en-tête — comme un relevé comptable. Les
@@ -273,12 +271,7 @@ export function Documents({ kind }: { kind: DocumentKind }) {
                 <div className="surface flex flex-col overflow-hidden rounded-2xl">
                   {group.items.map((entry) =>
                     entry.type === 'rapport' ? (
-                      <ReportRow
-                        key={entry.report.id}
-                        report={entry.report}
-                        alt={rowIndex++ % 2 === 1}
-                        onOpen={() => setOpenReport(entry.report)}
-                      />
+                      <ReportRow key={entry.report.id} report={entry.report} alt={rowIndex++ % 2 === 1} />
                     ) : (
                       <DocumentRow
                         key={entry.doc.id}
@@ -298,7 +291,6 @@ export function Documents({ kind }: { kind: DocumentKind }) {
         </SwipeToDeleteGroup>
       </div>
 
-      <ReportActionsDialog report={openReport} open={openReport !== null} onOpenChange={(o) => !o && setOpenReport(null)} />
     </Page>
   )
 }
@@ -394,28 +386,15 @@ function DocumentRow({
 }
 
 // Rangée distincte pour un rapport d'intervention, mélangé à la liste des
-// factures — fond bleu translucide façon "verre" (même famille que .glass,
-// juste une teinte primaire en plus) pour qu'on le distingue d'un coup
-// d'œil d'une vraie facture, pas de montant ni de statut payé à afficher.
-// Cliquer ouvre le dialog d'actions (télécharger / envoyer par email) plutôt
-// que de régénérer directement le PDF — l'envoi par email demande de saisir
-// une adresse, pas la place pour ça dans une simple ligne de liste.
-function ReportRow({
-  report,
-  alt,
-  onOpen,
-}: {
-  report: InterventionReportListItem
-  alt: boolean
-  onOpen: () => void
-}) {
-  const client = [report.i_client_first_name, report.i_client_last_name].filter(Boolean).join(' ')
-  const eventDate = report.i_completed_at ?? report.i_started_at ?? report.i_created_at
-
+// factures — teinte bleue pour le distinguer d'une facture (pas de montant ni
+// de statut payé). Un appui l'ouvre comme un devis ou une facture :
+// Modifier · Aperçu · Historique.
+function ReportRow({ report, alt }: { report: Report; alt: boolean }) {
+  const client = reportClientName(report)
+  const when = report.arrival_at ?? report.end_at ?? report.created_at
   return (
-    <button
-      type="button"
-      onClick={onOpen}
+    <Link
+      to={`/rapports/${report.id}`}
       className={`liquid flex w-full items-center justify-between gap-3 border-b border-border/60 bg-primary/8 px-3 py-3 text-left backdrop-blur-sm last:border-b-0 ${alt ? 'bg-primary/12' : ''}`}
     >
       <div className="flex min-w-0 items-center gap-2.5">
@@ -424,13 +403,15 @@ function ReportRow({
         </span>
         <div className="min-w-0">
           <p className="truncate font-medium">{client || 'Client sans nom'}</p>
-          <p className="text-xs text-muted-foreground">{report.i_reference} · Rapport d'intervention</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {report.number} · {report.title || "Rapport d'intervention"}
+          </p>
         </div>
       </div>
       <div className="shrink-0 text-right">
-        <p className="text-xs text-primary">{new Date(eventDate).toLocaleDateString('fr-FR')}</p>
+        <p className="text-xs text-primary">{new Date(when).toLocaleDateString('fr-FR')}</p>
       </div>
-    </button>
+    </Link>
   )
 }
 
