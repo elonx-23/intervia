@@ -18,6 +18,8 @@ import {
   LINE,
   M,
   MUTED,
+  RED,
+  RED_BG,
   TEXT,
   ZEBRA,
   drawBrandHeader,
@@ -28,6 +30,7 @@ import {
   fontSetter,
   frDate,
 } from './pdfParts.mjs'
+import { DEVIS_CONSENT, devisMentions, factureMentions } from './legal.mjs'
 
 export { euro, frDate }
 
@@ -75,25 +78,28 @@ export function renderDocumentPdf({ jsPDF, autoTable, doc, company, logoDataUrl,
   const stamp =
     !isDevis && doc.status === 'payee'
       ? {
+          // Rouge, comme le tampon « Acquittée » des factures papier.
+          tone: 'red',
           title: 'ACQUITTÉE',
           line: [doc.paid_at && `le ${frDate(doc.paid_at)}`, doc.payment_method && `par ${String(doc.payment_method).toLowerCase()}`]
             .filter(Boolean)
             .join(' '),
         }
       : isDevis && doc.status === 'signe'
-        ? { title: 'SIGNÉ', line: doc.signed_at ? `le ${frDate(doc.signed_at)}` : '' }
+        ? { tone: 'green', title: 'SIGNÉ', line: doc.signed_at ? `le ${frDate(doc.signed_at)}` : '' }
         : null
   if (stamp) {
     const w = 52
     const x = A4_W - M - w
-    pdf.setFillColor(...GREEN_BG)
-    pdf.setDrawColor(...GREEN)
+    const [ink, bg] = stamp.tone === 'red' ? [RED, RED_BG] : [GREEN, GREEN_BG]
+    pdf.setFillColor(...bg)
+    pdf.setDrawColor(...ink)
     pdf.setLineWidth(0.35)
     pdf.roundedRect(x, 40, w, 12, 2, 2, 'FD')
-    set(9, 'bold', GREEN)
+    set(9, 'bold', ink)
     pdf.text(stamp.title, x + w / 2, 45, { align: 'center', charSpace: 0.5 })
     if (stamp.line) {
-      set(7, 'normal', GREEN)
+      set(7, 'normal', ink)
       pdf.text(stamp.line, x + w / 2, 49.3, { align: 'center' })
     }
   }
@@ -219,7 +225,7 @@ export function renderDocumentPdf({ jsPDF, autoTable, doc, company, logoDataUrl,
   // ===== Totaux (à droite) et mentions / signature (à gauche) =====
   let y = lastY() + 8
   const pageBottom = A4_H - 26
-  if (y + 52 > pageBottom) {
+  if (y + 72 > pageBottom) {
     pdf.addPage()
     y = 20
   }
@@ -253,16 +259,31 @@ export function renderDocumentPdf({ jsPDF, autoTable, doc, company, logoDataUrl,
   let ly = y
   if ((doc.vat_rate ?? 20) < 20) {
     const note = isDevis
-      ? "En signant ce devis, le client accepte les conditions générales ci-après et certifie que les conditions d'application du taux réduit de TVA sont remplies (locaux d'habitation achevés depuis plus de deux ans, travaux éligibles)."
-      : "Le client a attesté, sur le devis signé, que les conditions d'application du taux réduit de TVA sont remplies."
+      ? "TVA à taux réduit : en signant, le client atteste que les travaux portent sur des locaux d'habitation achevés depuis plus de deux ans et remplissent les conditions du taux réduit (art. 279-0 bis du CGI)."
+      : 'TVA à taux réduit : le client a attesté, sur le devis signé, que les conditions du taux réduit sont remplies (art. 279-0 bis du CGI).'
     set(7.2, 'normal', MUTED)
     const lines = pdf.splitTextToSize(note, leftW)
     pdf.text(lines, M, ly + 2)
     ly += lines.length * 3.2 + 5
   }
-  // Devis : cadre « Bon pour accord » (ou signature déjà apposée).
+  // Mentions obligatoires : devis (gratuit/payant, pièces remplacées,
+  // rétractation) ou facture (paiement comptant, pénalités de retard).
+  set(7, 'normal', MUTED)
+  for (const m of isDevis ? devisMentions(company) : factureMentions()) {
+    const lines = pdf.splitTextToSize(m, leftW)
+    pdf.text(lines, M, ly + 2)
+    ly += lines.length * 3.1 + 1.4
+  }
+  ly += 3
+
+  // Devis : cadre « Bon pour accord » avec ce que le client accepte en signant
+  // (mention « Devis reçu avant l'exécution des travaux », CGV, exécution
+  // immédiate) ; facture signée : la signature du client.
   if (isDevis || doc.signature_data) {
-    const boxH = 30
+    set(7.2, 'normal')
+    const consent = isDevis ? pdf.splitTextToSize(DEVIS_CONSENT, leftW - 8) : []
+    const consentH = consent.length ? consent.length * 3.2 + 2 : 0
+    const boxH = 30 + consentH
     pdf.setDrawColor(...LINE)
     pdf.setLineWidth(0.3)
     pdf.setLineDashPattern([1.2, 1], 0)
@@ -270,9 +291,14 @@ export function renderDocumentPdf({ jsPDF, autoTable, doc, company, logoDataUrl,
     pdf.setLineDashPattern([], 0)
     set(7.2, 'bold', MUTED)
     pdf.text(isDevis ? 'BON POUR ACCORD' : 'SIGNATURE DU CLIENT', M + 4, ly + 5.5, { charSpace: 0.3 })
+    if (consent.length) {
+      set(7.2, 'normal', TEXT)
+      pdf.text(consent, M + 4, ly + 10)
+    }
+    const sigY = ly + 8 + consentH
     if (doc.signature_data) {
       try {
-        pdf.addImage(doc.signature_data, 'PNG', M + 4, ly + 8, 44, 19)
+        pdf.addImage(doc.signature_data, 'PNG', M + 4, sigY, 44, 19)
       } catch {
         // signature illisible : le cadre reste vide
       }
@@ -282,10 +308,10 @@ export function renderDocumentPdf({ jsPDF, autoTable, doc, company, logoDataUrl,
       }
     } else if (isDevis && doc.status === 'signe') {
       set(9, 'bold', GREEN)
-      pdf.text(doc.signed_at ? `Accepté le ${frDate(doc.signed_at)}` : 'Accepté par le client', M + 4, ly + 13)
+      pdf.text(doc.signed_at ? `Accepté le ${frDate(doc.signed_at)}` : 'Accepté par le client', M + 4, sigY + 6)
     } else {
       set(7.2, 'normal', MUTED)
-      pdf.text(pdf.splitTextToSize('Date, signature et mention manuscrite « Bon pour accord »', leftW - 8), M + 4, ly + 10)
+      pdf.text('Date et signature du client :', M + 4, sigY + 3)
     }
     ly += boxH + 4
   }
@@ -367,7 +393,7 @@ export function renderDocumentPdf({ jsPDF, autoTable, doc, company, logoDataUrl,
   }
 
   // ===== Pied de page sur chaque page : mentions légales + numéro de page =====
-  drawFooters(pdf, footerLines)
+  drawFooters(pdf, footerLines, `${isDevis ? 'Devis' : 'Facture'} n° ${doc.number}`)
 
   return pdf
 }

@@ -24,6 +24,11 @@ const EMPTY: CompanySettings = {
   phone: '',
   email: '',
   logoUrl: '',
+  capital: '',
+  registration: '',
+  insurance: '',
+  mediator: '',
+  devisFee: '',
 }
 
 export default function CompanyEditSettings() {
@@ -78,10 +83,11 @@ export default function CompanyEditSettings() {
     }
   }
 
-  const field = (key: keyof CompanySettings, label: string) => (
+  const field = (key: keyof CompanySettings, label: string, placeholder?: string, hint?: string) => (
     <div className="flex flex-col gap-2">
       <Label>{label}</Label>
-      <Input value={form[key]} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} />
+      <Input value={form[key] ?? ''} placeholder={placeholder} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} />
+      {hint && <p className="-mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   )
 
@@ -159,6 +165,32 @@ export default function CompanyEditSettings() {
                 {field('naf', 'Code NAF')}
               </div>
               {field('vatRegime', 'Régime de TVA')}
+            </CardContent>
+          </Card>
+        )}
+
+        {loaded && (
+          <Card>
+            <CardContent className="flex flex-col gap-3">
+              <div>
+                <p className="text-sm font-semibold">Mentions obligatoires des devis et factures</p>
+                <p className="text-xs text-muted-foreground">
+                  Exigées pour une entreprise de dépannage (Code de la consommation, arrêté du 24 janvier 2017, Code de commerce). Elles
+                  s'impriment sur les documents et dans les conditions générales.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {field('capital', 'Capital social', '1 000 €')}
+                {field('registration', 'Immatriculation', 'RCS Paris 907 722 847')}
+              </div>
+              {field('insurance', 'Assurance professionnelle', 'AXA, contrat n° 123456, couverture France', 'Assureur, numéro de contrat et zone couverte (RC professionnelle, décennale si obligatoire).')}
+              {field(
+                'mediator',
+                'Médiateur de la consommation',
+                'CNPM Médiation Consommation, www.cnpm-mediation-consommation.eu',
+                'Obligatoire avec des clients particuliers : nom et site du médiateur auquel tu as adhéré.',
+              )}
+              {field('devisFee', 'Devis payant', 'Laisser vide si le devis est gratuit', 'Ex. « 60 € HT, déduit si le devis est accepté ». Vide = « Devis gratuit » sur les devis.')}
             </CardContent>
           </Card>
         )}

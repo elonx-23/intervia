@@ -15,6 +15,11 @@ const EMPTY_COMPANY = {
   phone: '',
   email: '',
   logoUrl: '',
+  capital: '',
+  registration: '',
+  insurance: '',
+  mediator: '',
+  devisFee: '',
 }
 
 export function companyForTeam(teamId) {
@@ -26,12 +31,5 @@ export function companyForTeam(teamId) {
   return company
 }
 
-// Pied de page légal : uniquement les morceaux renseignés.
-export function companyLegalLines(company) {
-  const join = (parts) => parts.filter((p) => String(p ?? '').trim()).join(' — ')
-  return [
-    join([company.name, company.legalForm, company.address]),
-    join([company.siret && `SIRET ${company.siret}`, company.vatNumber && `TVA ${company.vatNumber}`, company.naf && `NAF ${company.naf}`]),
-    company.vatRegime,
-  ].filter((l) => String(l ?? '').trim())
-}
+// Pied de page légal : partagé avec l'app (shared/legal.mjs).
+export { companyLegalLines } from '../shared/legal.mjs'

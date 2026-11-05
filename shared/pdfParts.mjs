@@ -21,6 +21,8 @@ export const ZEBRA = [250, 251, 253]
 export const GROUP = [241, 245, 249]
 export const GREEN = [21, 128, 61]
 export const GREEN_BG = [220, 252, 231]
+export const RED = [185, 28, 28]
+export const RED_BG = [254, 226, 226]
 export const AMBER = [180, 83, 9]
 export const AMBER_BG = [254, 243, 199]
 
@@ -160,8 +162,8 @@ export function drawCards(pdf, y, cards) {
   return cardH
 }
 
-/** Pied de page sur chaque page : mentions légales + numéro de page. */
-export function drawFooters(pdf, footerLines) {
+/** Pied de page sur chaque page : mentions légales, numéro du document et de la page. */
+export function drawFooters(pdf, footerLines, docLabel = '') {
   const set = fontSetter(pdf)
   const pages = pdf.getNumberOfPages()
   for (let p = 1; p <= pages; p++) {
@@ -171,8 +173,15 @@ export function drawFooters(pdf, footerLines) {
     pdf.line(M, A4_H - 18, A4_W - M, A4_H - 18)
     set(6.5, 'normal', MUTED)
     const text = (footerLines ?? []).join('  ·  ')
-    const lines = pdf.splitTextToSize(text, CONTENT_W - 24)
+    const lines = pdf.splitTextToSize(text, CONTENT_W - (docLabel ? 46 : 24))
     pdf.text(lines, M, A4_H - 13.5)
-    pdf.text(`${p} / ${pages}`, A4_W - M, A4_H - 13.5, { align: 'right' })
+    if (docLabel) {
+      set(6.8, 'bold', TEXT)
+      pdf.text(docLabel, A4_W - M, A4_H - 13.5, { align: 'right' })
+      set(6.5, 'normal', MUTED)
+      pdf.text(`Page ${p} / ${pages}`, A4_W - M, A4_H - 10.4, { align: 'right' })
+    } else {
+      pdf.text(`${p} / ${pages}`, A4_W - M, A4_H - 13.5, { align: 'right' })
+    }
   }
 }

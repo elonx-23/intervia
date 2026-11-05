@@ -158,6 +158,12 @@ documentsRouter.get('/token/:token', (req, res) => {
       phone: c.phone,
       email: c.email,
       logoUrl: c.logoUrl,
+      // Mentions obligatoires imprimées sur le document (CGV, pied de page).
+      capital: c.capital,
+      registration: c.registration,
+      insurance: c.insurance,
+      mediator: c.mediator,
+      devisFee: c.devisFee,
     },
   })
 })

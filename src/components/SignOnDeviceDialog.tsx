@@ -1,7 +1,7 @@
 import { Eraser } from 'lucide-react'
 import * as React from 'react'
-import { Link } from 'react-router-dom'
 
+import { SignatureConsent } from '@/components/SignatureConsent'
 import { SignaturePad, type SignaturePadHandle } from '@/components/SignaturePad'
 import { Button } from '@/components/ui/button'
 import { CenteredDialogContent, Dialog, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -41,7 +41,7 @@ export function SignOnDeviceDialog({
       return
     }
     if (!acceptCgv) {
-      setError('Merci d’accepter les conditions générales de vente pour valider la signature.')
+      setError('Merci de cocher la case d’acceptation pour valider la signature.')
       return
     }
     setSaving(true)
@@ -83,22 +83,7 @@ export function SignOnDeviceDialog({
           />
         </div>
 
-        <label className="flex items-start gap-2.5 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={acceptCgv}
-            onChange={(e) => setAcceptCgv(e.target.checked)}
-            className="mt-0.5 size-4 shrink-0 rounded border-input"
-            style={{ accentColor: 'var(--primary)' }}
-          />
-          <span>
-            Le client accepte les{' '}
-            <Link to="/reglages/conditions" target="_blank" className="text-primary underline underline-offset-2">
-              conditions générales de vente
-            </Link>
-            .
-          </span>
-        </label>
+        <SignatureConsent kind={doc.kind === 'facture' ? 'facture' : 'devis'} checked={acceptCgv} onChange={setAcceptCgv} />
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 

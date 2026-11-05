@@ -422,6 +422,6 @@ export function renderReportPdf({ jsPDF, autoTable, report, document, company, l
   })
   y += boxH
 
-  drawFooters(pdf, footerLines)
+  drawFooters(pdf, footerLines, `Rapport n° ${report.number}`)
   return pdf
 }

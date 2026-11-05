@@ -1,6 +1,7 @@
 import { Eraser } from 'lucide-react'
 import * as React from 'react'
 
+import { SignatureConsent } from '@/components/SignatureConsent'
 import { SignaturePad, type SignaturePadHandle } from '@/components/SignaturePad'
 import { Button } from '@/components/ui/button'
 import { CenteredDialogContent, Dialog, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -41,7 +42,7 @@ export function PublicSignatureDialog({
       return
     }
     if (!acceptCgv) {
-      setError('Merci d’accepter les conditions générales de vente pour valider la signature.')
+      setError('Merci de cocher la case d’acceptation pour valider la signature.')
       return
     }
     setSaving(true)
@@ -80,17 +81,7 @@ export function PublicSignatureDialog({
           />
         </div>
 
-        <label className="flex items-start gap-2.5 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={acceptCgv}
-            onChange={(e) => setAcceptCgv(e.target.checked)}
-            className="mt-0.5 size-4 shrink-0 rounded border-input"
-            style={{ accentColor: 'var(--primary)' }}
-          />
-          {/* Les CGV sont celles imprimées sur le document lui-même (pas une page du logiciel). */}
-          <span>J'accepte les conditions générales de vente figurant sur le document.</span>
-        </label>
+        <SignatureConsent kind={doc.kind === 'facture' ? 'facture' : 'devis'} checked={acceptCgv} onChange={setAcceptCgv} />
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
