@@ -1,4 +1,5 @@
 import { db, now, uuid } from './db.mjs'
+import { broadcast } from './events.mjs'
 import { pushNotification } from './push.mjs'
 
 // Liste fermée des types réglables depuis Réglages → Notifications — sert à
@@ -48,7 +49,9 @@ export function notifyAdmin(teamId, type, title, body, data = {}) {
   db.prepare(
     'INSERT INTO notifications (id, recipient_role, recipient_technicien_id, team_id, type, title, body, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
   ).run(id, 'admin', null, teamId, type, title, body, JSON.stringify(data), createdAt)
-  pushSoon({ id, recipient_role: 'admin', recipient_technicien_id: null, team_id: teamId, title, body, data })
+  pushSoon({ id, type, recipient_role: 'admin', recipient_technicien_id: null, team_id: teamId, title, body, data })
+  // Page des notifications et cloche à jour tout de suite, sur tous les appareils.
+  broadcast('notifications_changed', {}, teamId)
 }
 
 export function notifyTechnicien(technicienId, teamId, type, title, body, data = {}) {
@@ -64,5 +67,6 @@ export function notifyTechnicien(technicienId, teamId, type, title, body, data =
   db.prepare(
     'INSERT INTO notifications (id, recipient_role, recipient_technicien_id, team_id, type, title, body, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
   ).run(id, 'technicien', technicienId, teamId, type, title, body, JSON.stringify(data), createdAt)
-  pushSoon({ id, recipient_role: 'technicien', recipient_technicien_id: technicienId, team_id: teamId, title, body, data })
+  pushSoon({ id, type, recipient_role: 'technicien', recipient_technicien_id: technicienId, team_id: teamId, title, body, data })
+  broadcast('notifications_changed', {}, teamId)
 }

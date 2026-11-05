@@ -1,6 +1,7 @@
 import webpush from 'web-push'
 
 import { db, now } from './db.mjs'
+import { notificationUrl } from './notificationLinks.mjs'
 
 // Clés générées via `npx web-push generate-vapid-keys` (voir VAPID.local.md
 // pour la procédure). Déplacées de code en dur vers server/.env : l'app sert
@@ -32,12 +33,24 @@ export async function pushNotification(n) {
           .prepare("SELECT * FROM push_subscriptions WHERE recipient_role = 'technicien' AND recipient_technicien_id = ?")
           .all(n.recipient_technicien_id)
 
+  // Lien à ouvrir au toucher, et nombre de non lues pour la pastille de
+  // l'icône de l'app.
+  const data = typeof n.data === 'string' ? JSON.parse(n.data) : (n.data ?? {})
+  const unread =
+    n.recipient_role === 'admin'
+      ? db
+          .prepare("SELECT COUNT(*) AS c FROM notifications WHERE recipient_role = 'admin' AND team_id = ? AND read_at IS NULL")
+          .get(n.team_id).c
+      : db
+          .prepare(
+            "SELECT COUNT(*) AS c FROM notifications WHERE recipient_role = 'technicien' AND recipient_technicien_id = ? AND read_at IS NULL",
+          )
+          .get(n.recipient_technicien_id).c
+  const payload = JSON.stringify({ title: n.title, body: n.body, data, url: notificationUrl(n.type, data), badge: unread, tag: n.id })
+
   for (const sub of subs) {
     try {
-      await webpush.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        JSON.stringify({ title: n.title, body: n.body, data: typeof n.data === 'string' ? JSON.parse(n.data) : n.data }),
-      )
+      await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload)
     } catch (e) {
       if (e.statusCode === 410 || e.statusCode === 404) {
         db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(sub.endpoint)

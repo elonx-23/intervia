@@ -10,6 +10,8 @@ export interface PseNotification {
   data: Record<string, unknown>
   read_at: string | null
   created_at: string
+  // Écran à ouvrir (fiche, devis, facture, paiements…), calculé par le serveur.
+  url?: string
 }
 
 export async function listNotifications(sessionId: string) {
@@ -22,6 +24,25 @@ export async function markNotificationRead(sessionId: string, id: string) {
 
 export async function markAllNotificationsRead(sessionId: string) {
   await apiFetch('/api/notifications/read-all', { method: 'POST', sessionId })
+}
+
+export async function deleteNotification(sessionId: string, id: string) {
+  await apiFetch(`/api/notifications/${id}`, { method: 'DELETE', sessionId })
+}
+
+export async function clearReadNotifications(sessionId: string) {
+  return apiFetch<{ ok: true; deleted: number }>('/api/notifications/read', { method: 'DELETE', sessionId })
+}
+
+// Pastille sur l'icône de l'app (écran d'accueil), quand le téléphone le permet.
+export function setAppBadge(count: number) {
+  const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> }
+  try {
+    if (count > 0) nav.setAppBadge?.(count)?.catch(() => {})
+    else nav.clearAppBadge?.()?.catch(() => {})
+  } catch {
+    // non pris en charge
+  }
 }
 
 export async function broadcastUrgentNotification(sessionId: string, title: string, body: string) {

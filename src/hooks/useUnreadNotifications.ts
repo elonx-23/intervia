@@ -1,7 +1,8 @@
 import * as React from 'react'
 
+import { useLiveEvents } from '@/hooks/useLiveEvents'
 import { useAuth } from '@/lib/auth'
-import { listNotifications } from '@/lib/notifications'
+import { listNotifications, setAppBadge } from '@/lib/notifications'
 
 const POLL_INTERVAL_MS = 30000
 
@@ -14,26 +15,25 @@ export function useUnreadNotifications() {
   const { session, demoMode } = useAuth()
   const [unread, setUnread] = React.useState(0)
 
-  React.useEffect(() => {
+  const check = React.useCallback(async () => {
     if (!session || demoMode) return
-    let cancelled = false
-
-    const check = async () => {
-      try {
-        const list = await listNotifications(session.sessionId)
-        if (!cancelled) setUnread(list.filter((n) => !n.read_at).length)
-      } catch {
-        // silencieux : la cloche affichera juste 0
-      }
-    }
-
-    check()
-    const interval = setInterval(check, POLL_INTERVAL_MS)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
+    try {
+      const list = await listNotifications(session.sessionId)
+      const count = list.filter((n) => !n.read_at).length
+      setUnread(count)
+      setAppBadge(count)
+    } catch {
+      // silencieux : la cloche affichera juste 0
     }
   }, [session, demoMode])
+
+  React.useEffect(() => {
+    check()
+    const interval = setInterval(check, POLL_INTERVAL_MS)
+    return () => clearInterval(interval)
+  }, [check])
+  // Nouvelle notification, ou lue sur un autre appareil : la cloche suit en direct.
+  useLiveEvents(['notifications_changed'], check)
 
   return unread
 }

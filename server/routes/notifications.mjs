@@ -3,21 +3,34 @@ import { Router } from 'express'
 import { db, now, uuid } from '../db.mjs'
 import { requireAdmin, requireAuth } from '../auth.mjs'
 import { ADMIN_NOTIFICATION_TYPES, ALL_NOTIFICATION_TYPES, TECHNICIEN_NOTIFICATION_TYPES, notifyTechnicien } from '../notify.mjs'
+import { broadcast } from '../events.mjs'
+import { notificationUrl } from '../notificationLinks.mjs'
 
 export const notificationsRouter = Router()
 notificationsRouter.use(requireAuth)
 
 function toApi(row) {
-  return { ...row, data: JSON.parse(row.data) }
+  const data = JSON.parse(row.data)
+  return { ...row, data, url: notificationUrl(row.type, data) }
 }
+
+// Notifications de l'appelant uniquement (admin : celles de l'équipe ;
+// technicien : les siennes).
+function scope(caller) {
+  return caller.role === 'admin'
+    ? { where: "recipient_role = 'admin' AND team_id = ?", args: [caller.team_id] }
+    : {
+        where: "recipient_role = 'technicien' AND team_id = ? AND recipient_technicien_id = ?",
+        args: [caller.team_id, caller.technicien_id],
+      }
+}
+const changed = (caller) => broadcast('notifications_changed', {}, caller.team_id)
 
 notificationsRouter.get('/', (req, res) => {
   const rows =
     req.caller.role === 'admin'
       ? db
-          .prepare(
-            "SELECT * FROM notifications WHERE recipient_role = 'admin' AND team_id = ? ORDER BY created_at DESC LIMIT 200",
-          )
+          .prepare("SELECT * FROM notifications WHERE recipient_role = 'admin' AND team_id = ? ORDER BY created_at DESC LIMIT 200")
           .all(req.caller.team_id)
       : db
           .prepare(
@@ -39,6 +52,7 @@ notificationsRouter.post('/:id/read', (req, res) => {
       "UPDATE notifications SET read_at=? WHERE id=? AND recipient_role='technicien' AND team_id=? AND recipient_technicien_id=?",
     ).run(now(), req.params.id, req.caller.team_id, req.caller.technicien_id)
   }
+  changed(req.caller)
   res.json({ ok: true })
 })
 
@@ -53,6 +67,22 @@ notificationsRouter.post('/read-all', (req, res) => {
       "UPDATE notifications SET read_at=? WHERE recipient_role='technicien' AND team_id=? AND recipient_technicien_id=? AND read_at IS NULL",
     ).run(now(), req.caller.team_id, req.caller.technicien_id)
   }
+  changed(req.caller)
+  res.json({ ok: true })
+})
+
+// Supprimer une notification (glisser vers la gauche), ou toutes les lues.
+notificationsRouter.delete('/read', (req, res) => {
+  const { where, args } = scope(req.caller)
+  const r = db.prepare(`DELETE FROM notifications WHERE ${where} AND read_at IS NOT NULL`).run(...args)
+  changed(req.caller)
+  res.json({ ok: true, deleted: r.changes })
+})
+
+notificationsRouter.delete('/:id', (req, res) => {
+  const { where, args } = scope(req.caller)
+  db.prepare(`DELETE FROM notifications WHERE id = ? AND ${where}`).run(req.params.id, ...args)
+  changed(req.caller)
   res.json({ ok: true })
 })
 
