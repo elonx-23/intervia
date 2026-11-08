@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/lib/auth'
 import { friendlyError } from '@/lib/errors'
-import { passwordError, resendVerificationEmail, signup } from '@/lib/signup'
+import { normalizeJoinCode, passwordError, rememberJoinCode, rememberedJoinCode, resendVerificationEmail, signup } from '@/lib/signup'
 
 export default function Inscription() {
   const { session } = useAuth()
@@ -28,23 +28,33 @@ export default function Inscription() {
   const [loading, setLoading] = React.useState(false)
   const [sent, setSent] = React.useState(preview)
   const [resent, setResent] = React.useState(false)
+  // Lien d'invitation du patron (/inscription?code=XXXX) : le code est
+  // appliqué tout seul à la confirmation de l'email.
+  const [joinCode] = React.useState(() => normalizeJoinCode(params.get('code')) || rememberedJoinCode())
+  React.useEffect(() => {
+    if (joinCode) rememberJoinCode(joinCode)
+  }, [joinCode])
 
   if (session && !preview) return <Navigate to="/" replace />
 
   const pwError = password ? passwordError(password) : null
   const confirmError = confirmPassword && password !== confirmPassword ? 'Les mots de passe ne correspondent pas.' : null
-  const canSubmit =
-    firstName && lastName && email && password && confirmPassword && !pwError && !confirmError && acceptCgv
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    // Le bouton reste toujours actif : chaque oubli est expliqué ici, au lieu
+    // d'un bouton grisé sans raison visible.
+    if (!firstName.trim() || !lastName.trim()) return setError('Indique ton prénom et ton nom.')
+    if (!email.trim()) return setError('Indique ton adresse email.')
+    if (!password) return setError('Choisis un mot de passe.')
     if (pwError) return setError(pwError)
+    if (!confirmPassword) return setError('Confirme ton mot de passe.')
     if (confirmError) return setError(confirmError)
-    if (!acceptCgv) return setError('Merci d’accepter les conditions générales de vente pour continuer.')
+    if (!acceptCgv) return setError('Coche la case pour accepter les conditions d’utilisation et continuer.')
     setLoading(true)
     try {
-      await signup(email.trim(), password, firstName.trim(), lastName.trim())
+      await signup(email.trim(), password, firstName.trim(), lastName.trim(), joinCode)
       setSent(true)
     } catch (e) {
       setError(friendlyError(e, "Erreur lors de l'inscription."))
@@ -65,6 +75,12 @@ export default function Inscription() {
         <h1 className="text-lg font-semibold">Vérifie ta boîte mail</h1>
         <p className="max-w-xs text-sm text-muted-foreground">
           On a envoyé un lien de confirmation à <strong>{email}</strong>. Clique dessus pour activer ton compte.
+        </p>
+        {joinCode && (
+          <p className="max-w-xs text-sm text-muted-foreground">Tu rejoindras ton équipe automatiquement en confirmant ton email.</p>
+        )}
+        <p className="max-w-xs text-xs text-muted-foreground">
+          Pas reçu d'ici quelques minutes ? Regarde dans tes courriers indésirables (spams).
         </p>
         {resent ? (
           <p className="text-xs text-muted-foreground">Email renvoyé.</p>
@@ -102,6 +118,16 @@ export default function Inscription() {
         </div>
       </div>
 
+      {joinCode && (
+        <div className="w-full max-w-sm rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
+          <p className="font-semibold">Invitation de ton équipe</p>
+          <p className="text-muted-foreground">
+            Code <span className="font-mono font-semibold text-foreground">{joinCode}</span> : tu rejoindras ton équipe automatiquement
+            après avoir confirmé ton email.
+          </p>
+        </div>
+      )}
+
       <Card className="w-full max-w-sm shadow-lg shadow-black/5">
         <CardContent>
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -117,13 +143,7 @@ export default function Inscription() {
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+              <Input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="password">Mot de passe</Label>
@@ -145,8 +165,8 @@ export default function Inscription() {
                   {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                6 caractères minimum, une majuscule et un caractère spécial (@, &, …).
+              <p className={`text-xs ${pwError ? 'text-destructive' : 'text-muted-foreground'}`}>
+                {pwError ?? '6 caractères minimum, une majuscule et un caractère spécial (@, &, …).'}
               </p>
             </div>
             <div className="flex flex-col gap-2">
@@ -183,14 +203,10 @@ export default function Inscription() {
               <span>
                 J'accepte les{' '}
                 <Link to="/reglages/conditions" target="_blank" className="text-primary underline underline-offset-2">
-                  conditions générales de vente
+                  conditions d'utilisation
                 </Link>{' '}
                 et la{' '}
-                <Link
-                  to="/reglages/confidentialite"
-                  target="_blank"
-                  className="text-primary underline underline-offset-2"
-                >
+                <Link to="/reglages/confidentialite" target="_blank" className="text-primary underline underline-offset-2">
                   politique de confidentialité
                 </Link>
                 .
@@ -198,11 +214,7 @@ export default function Inscription() {
             </label>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button
-              type="submit"
-              size="lg"
-              disabled={loading || !canSubmit}
-            >
+            <Button type="submit" size="lg" disabled={loading}>
               {loading ? 'Création…' : 'Créer mon compte'}
             </Button>
           </form>

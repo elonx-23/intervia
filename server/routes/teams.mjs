@@ -4,6 +4,7 @@ import { db, getSetting, now, randomJoinCode, uuid } from '../db.mjs'
 import { requireAdmin, requireAuth, sessionPayloadForUser } from '../auth.mjs'
 import { getStripe, isStripeConfigured } from '../stripe.mjs'
 import { rateLimit } from '../rateLimit.mjs'
+import { JoinError, joinTeamByCode, usedTechnicienSeats } from '../teamJoin.mjs'
 
 export const teamsRouter = Router()
 teamsRouter.use(requireAuth)
@@ -56,14 +57,6 @@ function requireFreshAccount(req, res) {
   return true
 }
 
-// Compte les sièges technicien déjà pris — sur la table `technicians`, pas
-// `users` : un technicien créé via l'ancien système (access_codes, encore
-// utilisé le temps de la transition) n'a aucune ligne `users`, donc compter
-// depuis `users` sous-évalue systématiquement l'équipe historique.
-function usedTechnicienSeats(teamId) {
-  return db.prepare('SELECT COUNT(*) AS c FROM technicians WHERE team_id = ? AND active = 1').get(teamId).c
-}
-
 // Infos de l'équipe du connecté — sert à afficher le code d'invitation dans
 // Réglages → Techniciens, pour que les techniciens s'inscrivent eux-mêmes
 // (nouveau système) au lieu que l'admin leur crée un compte à la main.
@@ -88,52 +81,14 @@ teamsRouter.get('/me', requireAdmin, (req, res) => {
 // (aucune erreur, aucun doublon) plutôt que d'échouer.
 teamsRouter.post('/join', joinTeamLimiter, (req, res) => {
   if (!req.caller.user_id) return res.status(400).json({ error: 'Fonction réservée aux comptes email/mot de passe.' })
-  if (req.caller.role === 'admin') {
-    return res.status(400).json({ error: 'Un compte administrateur ne peut pas aussi rejoindre une équipe en tant que technicien.' })
-  }
-
-  const code = String(req.body?.joinCode ?? '').trim().toUpperCase()
-  if (!code) return res.status(400).json({ error: "Code d'équipe requis." })
-
-  const team = db.prepare('SELECT * FROM teams WHERE join_code = ?').get(code)
-  if (!team) return res.status(404).json({ error: "Code d'équipe introuvable." })
-  if (team.status !== 'active') return res.status(403).json({ error: "Cette équipe n'est pas active pour le moment." })
-
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.caller.user_id)
-
-  const existingMembership = db
-    .prepare('SELECT * FROM team_memberships WHERE user_id = ? AND team_id = ?')
-    .get(user.id, team.id)
-
-  let technicienId
-  if (existingMembership) {
-    // Déjà membre — un code retapé par erreur ou pour re-rejoindre ne doit
-    // pas échouer, juste basculer sur cette équipe.
-    technicienId = existingMembership.technicien_id
-  } else {
-    if (usedTechnicienSeats(team.id) >= team.max_technicien_seats) {
-      return res.status(400).json({ error: "Cette équipe a atteint son nombre maximum de techniciens." })
-    }
-    technicienId = uuid()
-    db.prepare(
-      'INSERT INTO technicians (id, first_name, last_name, email, team_id, active, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)',
-    ).run(technicienId, user.first_name ?? '', user.last_name ?? '', user.email, team.id, now())
-    db.prepare(
-      'INSERT INTO team_memberships (id, user_id, team_id, technicien_id, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(uuid(), user.id, team.id, technicienId, now())
+  try {
+    const { user: updated } = joinTeamByCode(user, req.body?.joinCode)
+    res.json(sessionPayloadForUser(updated, req.sessionId))
+  } catch (e) {
+    if (e instanceof JoinError) return res.status(e.status).json({ error: e.message })
+    throw e
   }
-
-  // Rejoindre (ou re-sélectionner) une équipe la rend active tout de suite —
-  // c'est celle que l'utilisateur vient de choisir de voir/utiliser.
-  db.prepare('UPDATE users SET role = ?, team_id = ?, technicien_id = ? WHERE id = ?').run(
-    'technicien',
-    team.id,
-    technicienId,
-    user.id,
-  )
-
-  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id)
-  res.json(sessionPayloadForUser(updated, req.sessionId))
 })
 
 // Liste des équipes qu'un technicien a rejointes, avec laquelle est

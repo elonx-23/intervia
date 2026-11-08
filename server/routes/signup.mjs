@@ -5,6 +5,7 @@ import { hashPassword, passwordError } from '../password.mjs'
 import { sendMail } from '../mailer.mjs'
 import { rateLimit } from '../rateLimit.mjs'
 import { wrapEmail, ctaButton, fallbackLink } from '../emailTemplates.mjs'
+import { JoinError, joinTeamByCode, normalizeJoinCode } from '../teamJoin.mjs'
 
 export const signupRouter = Router()
 
@@ -65,7 +66,7 @@ async function sendVerificationEmail(req, userId, email) {
 }
 
 signupRouter.post('/', emailActionLimiter, async (req, res) => {
-  const { email, password, firstName, lastName } = req.body ?? {}
+  const { email, password, firstName, lastName, joinCode } = req.body ?? {}
   const cleanEmail = String(email ?? '').trim().toLowerCase()
 
   if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
@@ -77,11 +78,15 @@ signupRouter.post('/', emailActionLimiter, async (req, res) => {
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(cleanEmail)
   if (existing) return res.status(400).json({ error: 'Cet email est déjà utilisé.' })
 
+  // Inscription par le lien d'invitation du patron : le code d'équipe est
+  // gardé avec le compte et appliqué à la confirmation de l'email (même si
+  // le lien de confirmation s'ouvre dans une autre app que l'inscription).
+  const pendingJoinCode = normalizeJoinCode(joinCode) || null
   const userId = uuid()
   db.prepare(
-    `INSERT INTO users (id, email, password_hash, role, team_id, technicien_id, first_name, last_name, active, created_at)
-     VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, 1, ?)`,
-  ).run(userId, cleanEmail, hashPassword(password), firstName ?? null, lastName ?? null, now())
+    `INSERT INTO users (id, email, password_hash, role, team_id, technicien_id, first_name, last_name, active, created_at, pending_join_code)
+     VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, 1, ?, ?)`,
+  ).run(userId, cleanEmail, hashPassword(password), firstName ?? null, lastName ?? null, now(), pendingJoinCode)
 
   // Ne jamais attendre l'envoi ici — un SMTP lent ou temporairement
   // injoignable (déjà vu depuis un serveur distant, cf. Gmail qui peut
@@ -114,10 +119,23 @@ signupRouter.get('/verify/:token', (req, res) => {
     return res.status(400).json({ error: 'Ce lien a expiré, inscris-toi à nouveau.' })
   }
 
-  db.prepare('UPDATE users SET email_verified_at = ? WHERE id = ?').run(now(), row.user_id)
-  db.prepare('DELETE FROM email_verifications WHERE token = ?').run(row.token)
+  // Le lien reste valable jusqu'à son expiration : rouvert une seconde fois
+  // (double appui, application mail qui recharge), il ne doit pas afficher
+  // « lien invalide » alors que le compte est bien confirmé.
+  db.prepare('UPDATE users SET email_verified_at = COALESCE(email_verified_at, ?) WHERE id = ?').run(now(), row.user_id)
 
-  res.json({ ok: true })
+  // Inscrit avec le lien d'invitation : il rejoint l'équipe tout de suite.
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(row.user_id)
+  if (user?.pending_join_code && !user.role) {
+    try {
+      const { team } = joinTeamByCode(user, user.pending_join_code)
+      return res.json({ ok: true, team: team.name })
+    } catch (e) {
+      if (!(e instanceof JoinError)) throw e
+      return res.json({ ok: true, joinError: e.message })
+    }
+  }
+  res.json({ ok: true, team: user?.role === 'technicien' ? (db.prepare('SELECT name FROM teams WHERE id = ?').get(user.team_id)?.name ?? null) : null })
 })
 
 function resetPasswordHtml(link) {

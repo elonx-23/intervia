@@ -1,4 +1,4 @@
-import { Ban, CheckCircle2, Copy, Trash2 } from 'lucide-react'
+import { Ban, Check, CheckCircle2, Copy, Link2, MessageCircle, MessageSquare, Trash2 } from 'lucide-react'
 import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,7 @@ export default function Techniciens() {
   const [team, setTeam] = React.useState<MyTeam | null>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [copied, setCopied] = React.useState(false)
+  const [linkCopied, setLinkCopied] = React.useState(false)
 
   const load = React.useCallback(async () => {
     if (!session) return
@@ -41,6 +42,23 @@ export default function Techniciens() {
     } catch {
       // clipboard indisponible (contexte non sécurisé, permission refusée…) —
       // le code reste affiché à l'écran, l'utilisateur peut le copier à la main
+    }
+  }
+
+  // Lien d'invitation : le technicien crée son compte avec le code déjà
+  // rempli, et rejoint l'équipe dès qu'il confirme son email.
+  const inviteLink = team ? `${window.location.origin}/inscription?code=${encodeURIComponent(team.joinCode)}` : ''
+  const inviteText = team
+    ? `Rejoins l'équipe ${team.name} sur Intervia : crée ton compte avec ce lien (le code de l'équipe est déjà rempli) ${inviteLink}`
+    : ''
+  const isApple = /iPhone|iPad|iPod/.test(navigator.userAgent)
+  const copyInviteLink = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteLink)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch {
+      // le lien reste affiché, copiable à la main
     }
   }
 
@@ -79,8 +97,29 @@ export default function Techniciens() {
                 </span>
               </div>
               <p className="text-sm text-muted-foreground">
-                Le technicien s'inscrit lui-même sur Intervia, choisit « Rejoindre une équipe » et entre ce
-                code.
+                Envoie ce lien à ton technicien : il crée son compte, confirme son email et arrive directement dans ton équipe.
+              </p>
+              <div className="flex items-center gap-2 rounded-lg bg-secondary/60 px-3 py-2 text-xs">
+                <Link2 className="size-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">{inviteLink}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <Button variant="outline" size="sm" onClick={copyInviteLink}>
+                  {linkCopied ? <Check className="size-4" /> : <Copy className="size-4" />} {linkCopied ? 'Copié' : 'Copier'}
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <a href={`https://wa.me/?text=${encodeURIComponent(inviteText)}`} target="_blank" rel="noreferrer">
+                    <MessageCircle className="size-4" /> WhatsApp
+                  </a>
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <a href={`sms:${isApple ? '&' : '?'}body=${encodeURIComponent(inviteText)}`}>
+                    <MessageSquare className="size-4" /> SMS
+                  </a>
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Il a déjà un compte ? Il entre simplement le code de l'équipe après s'être connecté :
               </p>
               <div className="flex items-center gap-2">
                 <span className="flex-1 rounded-lg bg-secondary/60 px-3 py-2 text-center font-mono text-lg tracking-[0.2em]">
@@ -91,11 +130,7 @@ export default function Techniciens() {
                 </Button>
               </div>
               {copied && <p className="text-xs text-success">Code copié !</p>}
-              {seatsFull && (
-                <p className="text-xs text-destructive">
-                  Nombre maximum de techniciens atteint pour votre formule.
-                </p>
-              )}
+              {seatsFull && <p className="text-xs text-destructive">Nombre maximum de techniciens atteint pour votre formule.</p>}
             </CardContent>
           </Card>
         )}

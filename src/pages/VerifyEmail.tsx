@@ -9,11 +9,17 @@ export default function VerifyEmail() {
   const { token } = useParams<{ token: string }>()
   const [state, setState] = React.useState<'loading' | 'ok' | 'error'>('loading')
   const [error, setError] = React.useState<string | null>(null)
+  const [team, setTeam] = React.useState<string | null>(null)
+  const [joinError, setJoinError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     if (!token) return
     verifyEmail(token)
-      .then(() => setState('ok'))
+      .then((r) => {
+        setTeam(r.team ?? null)
+        setJoinError(r.joinError ?? null)
+        setState('ok')
+      })
       .catch((e) => {
         setError(friendlyError(e, 'Lien de vérification invalide ou expiré.'))
         setState('error')
@@ -33,7 +39,14 @@ export default function VerifyEmail() {
             ✓
           </div>
           <h1 className="text-lg font-semibold">Email confirmé</h1>
-          <p className="max-w-xs text-sm text-muted-foreground">Ton compte est actif, tu peux maintenant te connecter.</p>
+          {team ? (
+            <p className="max-w-xs text-sm text-muted-foreground">
+              Tu as rejoint l'équipe <strong className="text-foreground">{team}</strong>. Connecte-toi pour commencer.
+            </p>
+          ) : (
+            <p className="max-w-xs text-sm text-muted-foreground">Ton compte est actif, tu peux maintenant te connecter.</p>
+          )}
+          {joinError && <p className="max-w-xs text-sm text-destructive">{joinError} Tu pourras entrer le bon code après connexion.</p>}
           <Button asChild size="lg">
             <Link to="/login">Se connecter</Link>
           </Button>

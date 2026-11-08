@@ -72,5 +72,6 @@ export function sessionPayloadForUser(user, sessionId) {
     lastName: user.last_name,
     email: user.email,
     phone: null,
+    pendingJoinCode: user.pending_join_code ?? null,
   }
 }

@@ -19,6 +19,8 @@ export interface PseSession {
   lastName: string | null
   email: string | null
   phone: string | null
+  // Code d'équipe donné à l'inscription (lien d'invitation), pas encore appliqué.
+  pendingJoinCode?: string | null
 }
 
 interface AuthContextValue {

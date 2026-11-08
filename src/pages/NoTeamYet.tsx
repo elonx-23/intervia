@@ -1,4 +1,4 @@
-import { Building2, Check, ChevronLeft, ChevronRight, Mail, Phone, ShieldCheck, Users2 } from 'lucide-react'
+import { Building2, Check, ChevronLeft, HardHat, Loader2, Mail, Phone, ShieldCheck } from 'lucide-react'
 import * as React from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { useAuth } from '@/lib/auth'
 import { friendlyError } from '@/lib/errors'
 import { FORMULES, type FormuleKey } from '@/lib/formules'
+import { forgetJoinCode, rememberedJoinCode } from '@/lib/signup'
 import { createTeam, joinTeam, type TeamPlan } from '@/lib/teams'
 
 type View = 'choix' | FormuleKey
@@ -44,7 +45,9 @@ export default function NoTeamYet() {
   const [params] = useSearchParams()
   const preview = params.get('apercu') === '1'
   const [view, setView] = React.useState<View>('choix')
-  const [joinCode, setJoinCode] = React.useState('')
+  // Pré-rempli quand le technicien s'est inscrit avec le lien d'invitation.
+  const [joinCode, setJoinCode] = React.useState(() => session?.pendingJoinCode || rememberedJoinCode())
+  const [joinError, setJoinError] = React.useState<string | null>(null)
   const [form, setForm] = React.useState({ name: '', phone: '', email: session?.email ?? '', siret: '' })
   const [busy, setBusy] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
@@ -53,11 +56,13 @@ export default function NoTeamYet() {
     if (preview) return
     if (!session || !joinCode.trim()) return
     setBusy('join')
-    setError(null)
+    setJoinError(null)
     try {
-      updateSession(await joinTeam(session.sessionId, joinCode.trim()))
+      const next = await joinTeam(session.sessionId, joinCode.trim())
+      forgetJoinCode()
+      updateSession(next)
     } catch (e) {
-      setError(friendlyError(e, 'Erreur.'))
+      setJoinError(friendlyError(e, 'Code refusé, vérifie-le.'))
     } finally {
       setBusy(null)
     }
@@ -102,60 +107,6 @@ export default function NoTeamYet() {
     </button>
   )
 
-  if (view === 'technicien') {
-    const formule = FORMULES[0]
-    return (
-      <div className="mx-auto flex min-h-svh max-w-md flex-col gap-5 px-4 py-10">
-        <BackRow label="Toutes les formules" />
-
-        {/* Le technicien sur le terrain, tenue de travail, qui consulte
-            l'app — à côté du texte, avec la même lueur collée à l'image. */}
-        <div className="flex items-center gap-4">
-          <div className="relative shrink-0">
-            <div
-              className="absolute inset-[6%] -z-10 rounded-[2rem] opacity-60 blur-2xl"
-              style={{ background: formule.accent }}
-            />
-            <img
-              src="/marketing/hero-technicien.png"
-              alt="Technicien utilisant Intervia sur le terrain"
-              className="w-28 drop-shadow-2xl"
-            />
-          </div>
-
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <div
-              className="flex size-11 items-center justify-center rounded-2xl text-white"
-              style={{
-                background: `linear-gradient(160deg, color-mix(in srgb, ${formule.accent} 80%, white) 0%, ${formule.accent} 55%, color-mix(in srgb, ${formule.accent} 88%, black) 100%)`,
-                boxShadow: `0 6px 16px -6px ${formule.accent}`,
-              }}
-            >
-              <Users2 className="size-5" />
-            </div>
-            <h1 className="text-lg font-semibold">Rejoindre une équipe</h1>
-            <p className="text-sm text-muted-foreground">Gratuit — un admin t'a donné un code d'équipe ?</p>
-          </div>
-        </div>
-        {error && <p className="text-center text-sm text-destructive">{error}</p>}
-        <Card>
-          <CardContent className="flex flex-col gap-3">
-            <Input
-              placeholder="Code d'équipe"
-              autoFocus
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              className="text-center text-lg tracking-widest"
-            />
-            <Button size="lg" disabled={busy === 'join' || !joinCode.trim()} onClick={join}>
-              {busy === 'join' ? '…' : 'Rejoindre'}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
   if (view === 'solo' || view === 'entreprise' || view === 'entreprise_plus' || view === 'ultra') {
     const formule = FORMULES.find((f) => f.view === view)!
     const Icon = formule.icon
@@ -172,11 +123,7 @@ export default function NoTeamYet() {
               className="absolute inset-[6%] -z-10 rounded-[2rem] opacity-60 blur-2xl"
               style={{ background: `linear-gradient(135deg, ${formule.accent} 0%, ${formule.accent2} 100%)` }}
             />
-            <img
-              src="/marketing/hero-devis-dashboard.png"
-              alt="Intervia — devis et tableau de bord"
-              className="w-32 drop-shadow-2xl"
-            />
+            <img src="/marketing/hero-devis-dashboard.png" alt="Intervia — devis et tableau de bord" className="w-32 drop-shadow-2xl" />
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -207,11 +154,9 @@ export default function NoTeamYet() {
               {formule.points.map((point) => (
                 <li key={point} className="flex items-center gap-2 text-sm">
                   <Check className="size-4 shrink-0" style={{ color: formule.accent }} />
-                  <FormattedPoint
-                    text={point}
-                    accent={formule.accent}
-                    colored={view === 'entreprise_plus' || view === 'ultra'}
-                  />
+                  <span className="min-w-0">
+                    <FormattedPoint text={point} accent={formule.accent} colored={view === 'entreprise_plus' || view === 'ultra'} />
+                  </span>
                 </li>
               ))}
             </ul>
@@ -289,13 +234,7 @@ export default function NoTeamYet() {
             <p className="text-xs text-muted-foreground">Facturé mensuellement, résiliable à tout moment.</p>
 
             {error && <p className="text-center text-sm text-destructive">{error}</p>}
-            <Button
-              size="lg"
-              className="mt-1"
-              disabled={busy === view}
-              onClick={() => create(view)}
-              style={{ background: formule.accent }}
-            >
+            <Button size="lg" className="mt-1" disabled={busy === view} onClick={() => create(view)} style={{ background: formule.accent }}>
               {busy === view ? '…' : `Continuer vers le paiement — ${formule.price}`}
             </Button>
             <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
@@ -309,17 +248,61 @@ export default function NoTeamYet() {
   }
 
   return (
-    <div className="mx-auto flex min-h-svh max-w-2xl flex-col gap-5 py-10">
-      <div className="flex flex-col items-center gap-2 px-4 text-center">
-        <Users2 className="size-10 text-primary" />
-        <h1 className="text-lg font-semibold">Ton compte est confirmé</h1>
-        <p className="text-sm text-muted-foreground">Choisis une formule pour continuer.</p>
+    <div className="mx-auto flex min-h-svh max-w-2xl flex-col gap-6 px-4 py-10">
+      <div className="flex flex-col items-center gap-2 text-center">
+        <span className="flex size-14 items-center justify-center rounded-2xl bg-tone-green-soft text-tone-green-ink">
+          <Check className="size-7" />
+        </span>
+        <h1 className="text-xl font-semibold tracking-tight">Ton compte est confirmé</h1>
+        <p className="text-sm text-muted-foreground">Dernière étape : rejoins ton équipe, ou crée ton entreprise.</p>
       </div>
 
-      {/* Les 4 formules payantes, toutes avec la même bulle (bannière +
-          arguments de vente) — la formule technicien gratuite passe en
-          dessous, volontairement plus discrète. */}
-      <div className="grid grid-cols-2 gap-3 px-4">
+      {/* 1. Technicien — le cas le plus fréquent : le code de l'équipe, gratuit,
+          directement ici (avant, il était caché sous les formules payantes et
+          les techniciens croyaient devoir payer). */}
+      <Card className="border-2 border-primary/35">
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-tone-blue-soft text-tone-blue-ink">
+              <HardHat className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="font-semibold">Je suis technicien</p>
+              <p className="text-sm text-muted-foreground">Entre le code d'équipe donné par ton patron. C'est gratuit.</p>
+            </div>
+          </div>
+          <Input
+            placeholder="Code d'équipe"
+            value={joinCode}
+            onChange={(e) => {
+              setJoinCode(e.target.value.toUpperCase().replace(/\s/g, ''))
+              setJoinError(null)
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && join()}
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            className="h-12 text-center font-mono text-lg font-semibold tracking-[0.3em] placeholder:font-sans placeholder:text-base placeholder:font-normal placeholder:tracking-normal"
+          />
+          {joinError && <p className="text-sm text-destructive">{joinError}</p>}
+          <Button size="lg" disabled={busy === 'join' || !joinCode.trim()} onClick={join}>
+            {busy === 'join' ? <Loader2 className="size-4 animate-spin" /> : null}
+            Rejoindre mon équipe
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* 2. Chef d'entreprise : les formules. */}
+      <div className="flex flex-col gap-1 text-center">
+        <div className="flex items-center gap-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          <span className="h-px flex-1 bg-border" />
+          Je crée mon entreprise
+          <span className="h-px flex-1 bg-border" />
+        </div>
+        <p className="text-sm text-muted-foreground">Chef d'entreprise ? Choisis ta formule, sans engagement.</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         {FORMULES.filter((f) => f.view !== 'technicien').map((f) => {
           const Icon = f.icon
           return (
@@ -331,15 +314,13 @@ export default function NoTeamYet() {
                   boxShadow: `0 ${8 + f.badge / 4}px ${24 + f.badge}px -16px color-mix(in srgb, ${f.accent} 45%, transparent)`,
                 }}
               >
-                {/* Image accrocheuse : bannière dégradée aux couleurs de la
-                    formule, avec un motif de cercles et l'icône en grand. */}
                 <div
-                  className="relative flex h-24 shrink-0 items-center justify-center overflow-hidden"
+                  className="relative flex h-20 shrink-0 items-center justify-center overflow-hidden"
                   style={{ background: `linear-gradient(135deg, ${f.accent} 0%, ${f.accent2} 100%)` }}
                 >
                   <div className="absolute -top-6 -left-6 size-20 rounded-full bg-white/15" />
                   <div className="absolute -right-4 -bottom-8 size-24 rounded-full bg-white/10" />
-                  <Icon className="relative size-11 text-white drop-shadow-md" strokeWidth={1.6} />
+                  <Icon className="relative size-10 text-white drop-shadow-md" strokeWidth={1.6} />
                 </div>
 
                 <CardContent className="flex flex-1 flex-col gap-2.5 p-3.5">
@@ -352,13 +333,11 @@ export default function NoTeamYet() {
                   </p>
                   <ul className="flex flex-1 flex-col gap-1.5 border-t border-border/70 pt-2.5">
                     {f.points.map((point) => (
-                      <li key={point} className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                      <li key={point} className="flex items-start gap-1.5 text-[11px] leading-snug text-muted-foreground">
                         <Check className="mt-0.5 size-3 shrink-0" style={{ color: f.accent }} />
-                        <FormattedPoint
-                          text={point}
-                          accent={f.accent}
-                          colored={f.view === 'entreprise_plus' || f.view === 'ultra'}
-                        />
+                        <span className="min-w-0">
+                          <FormattedPoint text={point} accent={f.accent} colored={f.view === 'entreprise_plus' || f.view === 'ultra'} />
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -371,36 +350,6 @@ export default function NoTeamYet() {
           )
         })}
       </div>
-
-      {/* Formule technicien gratuite — discrète, en dessous des deux
-          formules payantes qu'elle ne doit pas concurrencer visuellement. */}
-      {(() => {
-        const tech = FORMULES.find((f) => f.view === 'technicien')!
-        const Icon = tech.icon
-        return (
-          <div className="px-4">
-            <button type="button" onClick={() => setView('technicien')} className="w-full text-left">
-              <Card className="liquid">
-                <CardContent className="flex items-center gap-3 py-1">
-                  <div
-                    className="flex size-9 shrink-0 items-center justify-center rounded-full text-white"
-                    style={{ background: tech.accent }}
-                  >
-                    <Icon className="size-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">
-                      {tech.title} <span className="text-muted-foreground">— {tech.price}</span>
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">{tech.pitch}</p>
-                  </div>
-                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                </CardContent>
-              </Card>
-            </button>
-          </div>
-        )
-      })()}
 
       <Button variant="ghost" size="sm" onClick={logout} className="mx-auto">
         Se déconnecter
