@@ -25,3 +25,13 @@ export function isoLocalDate(d: Date) {
 export function formatEuro(n: number) {
   return `${n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
 }
+
+/** Téléphone français au format « 06 12 34 56 78 » (sinon tel quel). */
+export function formatPhone(raw: string | null | undefined) {
+  if (!raw) return ''
+  let d = String(raw).replace(/[^\d+]/g, '')
+  if (d.startsWith('+33')) d = `0${d.slice(3)}`
+  else if (d.startsWith('0033')) d = `0${d.slice(4)}`
+  if (/^0[1-9]\d{8}$/.test(d)) return d.replace(/(\d{2})(?=\d)/g, '$1 ').trim()
+  return String(raw).trim()
+}

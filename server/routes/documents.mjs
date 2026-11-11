@@ -1,5 +1,7 @@
 import { Router } from 'express'
 
+import { formatFrenchPhone } from '../contactCheck.mjs'
+
 import { db, getSetting, now, uuid } from '../db.mjs'
 import { requireAdmin, requireAuth } from '../auth.mjs'
 import { notifyAdmin } from '../notify.mjs'
@@ -22,6 +24,9 @@ export const documentsRouter = Router()
 // Stripe. Généreux (30/heure) pour ne jamais gêner un usage professionnel
 // normal.
 const externalActionLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30 })
+
+// Clé client d'un numéro : chiffres seuls, au format national (0612345678).
+const clientPhoneKey = (phone) => (formatFrenchPhone(phone) ?? '').replace(/\s/g, '')
 
 function toApi(row) {
   if (!row) return row
@@ -393,7 +398,8 @@ documentsRouter.get('/clients', requireAdmin, (req, res) => {
   for (const row of rows) {
     const name = `${row.client_first_name} ${row.client_last_name}`.trim()
     const phone = (row.phone ?? '').trim()
-    const key = phone || `${name.toLowerCase()}|${(row.address ?? '').trim().toLowerCase()}`
+    // Même client quel que soit le format du numéro (06 12 34 56 78 / 0612345678).
+    const key = clientPhoneKey(phone) || `${name.toLowerCase()}|${(row.address ?? '').trim().toLowerCase()}`
     if (!key || key === '|') continue
 
     if (!clients.has(key)) {
@@ -458,7 +464,8 @@ documentsRouter.get('/search-clients', (req, res) => {
   for (const row of rows) {
     const name = `${row.client_first_name} ${row.client_last_name}`.trim()
     const phone = (row.phone ?? '').trim()
-    const key = phone || `${name.toLowerCase()}|${(row.address ?? '').trim().toLowerCase()}`
+    // Même client quel que soit le format du numéro (06 12 34 56 78 / 0612345678).
+    const key = clientPhoneKey(phone) || `${name.toLowerCase()}|${(row.address ?? '').trim().toLowerCase()}`
     if (!key || key === '|') continue
     if (latestByKey.has(key)) continue
     latestByKey.set(key, {

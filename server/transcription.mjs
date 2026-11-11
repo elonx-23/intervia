@@ -15,6 +15,11 @@ const inFlight = new Set()
 // prochaine synchro plutôt que marqué en erreur tout de suite.
 const RETRY_WINDOW_MS = 15 * 60 * 1000
 
+const TRANSCRIPTION_MODEL = process.env.OPENAI_TRANSCRIPTION_MODEL || 'gpt-4o-transcribe'
+// Contexte donné au modèle de transcription (vocabulaire attendu).
+const TRANSCRIPTION_CONTEXT =
+  "Appel téléphonique à une entreprise de dépannage à domicile en Île-de-France (serrurerie, plomberie, électricité). Le client donne son nom (parfois épelé lettre par lettre), son numéro de téléphone, son adresse (numéro, rue, avenue, boulevard, code postal, ville ou arrondissement de Paris), l'étage, le digicode, l'interphone, le bâtiment. Porte claquée, serrure, cylindre, fuite, chauffe-eau, disjoncteur, tableau électrique."
+
 // L'URL du fichier fournie par OVH est directement téléchargeable (pas
 // d'authentification à envoyer, la signature des appels API ne s'y applique
 // pas). Le format (mp3, wav…) est celui que renvoie OVH.
@@ -59,11 +64,27 @@ async function transcribe(callId, recordingUrl, openaiApiKey) {
     })
 
     const openai = new OpenAI({ apiKey: openaiApiKey })
-    const transcription = await openai.audio.transcriptions.create({
-      file: new File([audio.buffer], `appel.${audio.extension}`, { type: audio.contentType }),
-      model: 'whisper-1',
-      language: 'fr',
-    })
+    const file = () => new File([audio.buffer], `appel.${audio.extension}`, { type: audio.contentType })
+    let transcription
+    try {
+      // Modèle de transcription récent, bien plus juste que Whisper sur les
+      // noms propres, les adresses et les chiffres ; le contexte l'aide à
+      // reconnaître le vocabulaire du métier.
+      transcription = await openai.audio.transcriptions.create({
+        file: file(),
+        model: TRANSCRIPTION_MODEL,
+        language: 'fr',
+        prompt: TRANSCRIPTION_CONTEXT,
+      })
+    } catch (e) {
+      console.log(`[telephonie] ${TRANSCRIPTION_MODEL} indisponible (${e.message}), repli sur whisper-1`)
+      transcription = await openai.audio.transcriptions.create({
+        file: file(),
+        model: 'whisper-1',
+        language: 'fr',
+        prompt: TRANSCRIPTION_CONTEXT,
+      })
+    }
 
     db.prepare("UPDATE calls SET transcription = ?, transcription_status = 'ok' WHERE id = ?").run(transcription.text, callId)
     if (call) broadcast('call_update', { id: callId }, call.team_id)

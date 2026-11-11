@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Copy, FileText, KeyRound, MapPin, Navigation, Phone, PhoneIncoming } from 'lucide-react'
+import { Check, ChevronRight, Copy, FileText, KeyRound, MapPin, Navigation, Phone, PhoneIncoming, TriangleAlert } from 'lucide-react'
 import * as React from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
@@ -43,8 +43,10 @@ import {
   updateInterventionStatus,
   type Intervention,
   type Technician,
+  markIntakeChecked,
 } from '@/lib/interventions'
 import { presetsFor } from '@/lib/itemPresets'
+import { formatPhone } from '@/lib/utils'
 
 export default function InterventionDetail() {
   const { id } = useParams()
@@ -318,9 +320,32 @@ export default function InterventionDetail() {
               Créée depuis un appel — à vérifier
             </p>
             <p className="text-xs text-muted-foreground">
-              Remplie automatiquement en écoutant l'appel. Un nom de rue ou un code a pu être mal compris : réécoute en
-              cas de doute.
+              Remplie automatiquement en écoutant l'appel ; l'adresse est contrôlée dans la base nationale des adresses. En cas de
+              doute, réécoute l'appel.
             </p>
+            {intervention.intake_notes && intervention.intake_notes.length > 0 && (
+              <div className="flex flex-col gap-2 rounded-xl bg-tone-amber-soft px-3 py-2.5 text-tone-amber-ink">
+                <p className="flex items-center gap-1.5 text-xs font-semibold">
+                  <TriangleAlert className="size-3.5" /> À vérifier avant d'envoyer le technicien
+                </p>
+                <ul className="list-disc pl-4 text-xs leading-relaxed">
+                  {intervention.intake_notes.map((n) => (
+                    <li key={n}>{n}</li>
+                  ))}
+                </ul>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-fit bg-background/70"
+                  onClick={async () => {
+                    if (!session) return
+                    setIntervention(await markIntakeChecked(session.sessionId, intervention.id))
+                  }}
+                >
+                  <Check className="size-4" /> C'est vérifié
+                </Button>
+              </div>
+            )}
             <RecordingPlayer callId={intervention.source_call_id} sessionId={session.sessionId} />
             <CallSummary callId={intervention.source_call_id} sessionId={session.sessionId} />
           </div>
@@ -438,7 +463,7 @@ export default function InterventionDetail() {
                     <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-tone-green-soft text-tone-green-ink">
                       <Phone className="size-4" />
                     </span>
-                    <span className="font-medium">{intervention.phone}</span>
+                    <span className="font-medium">{formatPhone(intervention.phone)}</span>
                   </a>
                 )}
                 {(intervention.address || intervention.city) && (

@@ -1,5 +1,7 @@
 import { Router } from 'express'
 
+import { formatFrenchPhone } from '../contactCheck.mjs'
+
 import { db, now, uuid } from '../db.mjs'
 import { requireAdmin, requireAuth } from '../auth.mjs'
 import { notifyTechnicien } from '../notify.mjs'
@@ -33,7 +35,13 @@ export function nextReference() {
 }
 
 function toApi(row) {
-  return { ...row, photos: JSON.parse(row.photos) }
+  let notes = null
+  try {
+    notes = row.intake_notes ? JSON.parse(row.intake_notes) : null
+  } catch {
+    notes = null
+  }
+  return { ...row, photos: JSON.parse(row.photos), intake_notes: notes }
 }
 
 // Classement des fiches (onglets de la liste) :
@@ -135,7 +143,7 @@ interventionsRouter.post('/', requireAdmin, (req, res) => {
     nextReference(),
     b.clientFirstName ?? '',
     b.clientLastName ?? '',
-    b.phone ?? null,
+    formatFrenchPhone(b.phone) ?? null,
     b.address ?? null,
     b.postalCode ?? null,
     b.city ?? null,
@@ -180,7 +188,7 @@ interventionsRouter.patch('/:id', requireAdmin, (req, res) => {
   ).run(
     b.clientFirstName ?? existing.client_first_name,
     b.clientLastName ?? existing.client_last_name,
-    b.phone ?? existing.phone,
+    b.phone !== undefined ? formatFrenchPhone(b.phone) : existing.phone,
     b.address ?? existing.address,
     b.postalCode ?? existing.postal_code,
     b.city ?? existing.city,
@@ -199,6 +207,15 @@ interventionsRouter.patch('/:id', requireAdmin, (req, res) => {
 // Photos prises sur le terrain (avant/après réparation) — le technicien
 // assigné peut les ajouter, pas seulement l'admin, contrairement au reste de
 // la fiche (client, adresse…) qui reste en lecture seule pour lui.
+// Points relevés à la prise d'appel : le patron les a vérifiés.
+interventionsRouter.post('/:id/intake-checked', requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT * FROM interventions WHERE id = ? AND team_id = ?').get(req.params.id, req.caller.team_id)
+  if (!row) return res.status(404).json({ error: 'Intervention introuvable' })
+  db.prepare('UPDATE interventions SET intake_notes = NULL WHERE id = ?').run(row.id)
+  broadcast('interventions_changed', { id: row.id }, row.team_id)
+  res.json(toApi(db.prepare('SELECT * FROM interventions WHERE id = ?').get(row.id)))
+})
+
 interventionsRouter.post('/:id/photos', (req, res) => {
   const { photos } = req.body ?? {}
   if (!Array.isArray(photos)) return res.status(400).json({ error: 'Photos invalides' })

@@ -8,6 +8,7 @@ import { TradeIcon } from '@/components/TradeIcon'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth'
+import { formatPhone } from '@/lib/utils'
 import { STATUS_LABELS, getIntervention, listTechnicians, type Intervention } from '@/lib/interventions'
 import { INTERVENTION_TONE } from '@/lib/tones'
 import { getShares, type TakenBy } from '@/lib/whatsapp'
@@ -87,7 +88,7 @@ export function InterventionContext({ interventionId }: { interventionId: string
           {i.phone && (
             <Row icon={Phone}>
               <a href={`tel:${i.phone.replace(/\s/g, '')}`} className="font-medium text-primary">
-                {i.phone}
+                {formatPhone(i.phone)}
               </a>
             </Row>
           )}

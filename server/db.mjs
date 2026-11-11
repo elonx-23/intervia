@@ -337,6 +337,8 @@ ensureColumn('teams', 'siret', 'TEXT')
 ensureColumn('interventions', 'floor', 'TEXT')
 ensureColumn('interventions', 'access_codes', 'TEXT')
 ensureColumn('interventions', 'source_call_id', 'TEXT')
+// Points à vérifier relevés à la prise d'appel par l'IA (liste JSON).
+ensureColumn('interventions', 'intake_notes', 'TEXT')
 ensureColumn('calls', 'intervention_id', 'TEXT')
 ensureColumn('calls', 'provider_call_id', 'TEXT')
 ensureColumn('calls', 'summary', 'TEXT')

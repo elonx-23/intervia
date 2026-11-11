@@ -25,9 +25,15 @@ import { friendlyError } from '@/lib/errors'
 // nom + adresse) — dupliquée ici volontairement, c'est une comparaison
 // simple sur des champs déjà en mémoire, pas la peine d'un aller-retour API
 // dédié.
+// Chiffres seuls au format national : 06 12 34 56 78 = 0612345678 = +33 6 12 34 56 78.
+const phoneDigits = (p: string | null | undefined) => {
+  let d = String(p ?? '').replace(/[^\d+]/g, '')
+  if (d.startsWith('+33')) d = `0${d.slice(3)}`
+  return d.replace(/\D/g, '')
+}
+
 function matches(doc: PseDocument, client: ClientSummary) {
-  const phone = (doc.phone ?? '').trim()
-  if (client.phone) return phone === client.phone
+  if (client.phone) return phoneDigits(doc.phone) === phoneDigits(client.phone)
   const name = `${doc.client_first_name} ${doc.client_last_name}`.trim().toLowerCase()
   const address = (doc.address ?? '').trim().toLowerCase()
   return `${name}|${address}` === client.key
