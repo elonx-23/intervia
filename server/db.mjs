@@ -367,6 +367,8 @@ if (db.prepare('PRAGMA table_info(intervention_reports)').all().find((c) => c.na
 }
 db.exec('CREATE INDEX IF NOT EXISTS idx_reports_team ON intervention_reports (team_id, created_at)')
 ensureColumn('calls', 'analyzed_at', 'TEXT')
+// Seconde écoute de l'appel (voir transcription.mjs), croisée par l'IA.
+ensureColumn('calls', 'transcription_alt', 'TEXT')
 ensureColumn('telephony_orders', 'last_pay_attempt_at', 'TEXT')
 ensureColumn('telephony_orders', 'paid_reported_at', 'TEXT')
 ensureColumn('telephony_orders', 'provider', 'TEXT')

@@ -36,6 +36,47 @@ export async function downloadRecording(url) {
   return { buffer: Buffer.from(await res.arrayBuffer()), contentType: mimeByExtension[extension], extension }
 }
 
+// Deux écoutes de l'appel en parallèle, que l'IA croise ensuite :
+// - l'une sépare les voix (qui parle : le standard ou le client) ;
+// - l'autre connaît le vocabulaire du métier (rues, digicodes, noms épelés)
+//   et orthographie mieux.
+// Si une écoute échoue, l'autre suffit ; si les deux échouent, Whisper.
+async function listen(openai, audio) {
+  const file = () => new File([audio.buffer], `appel.${audio.extension}`, { type: audio.contentType })
+  const [diarized, prompted] = await Promise.allSettled([
+    openai.audio.transcriptions.create({
+      file: file(),
+      model: 'gpt-4o-transcribe-diarize',
+      response_format: 'diarized_json',
+      chunking_strategy: 'auto',
+      language: 'fr',
+    }),
+    openai.audio.transcriptions.create({ file: file(), model: TRANSCRIPTION_MODEL, language: 'fr', prompt: TRANSCRIPTION_CONTEXT }),
+  ])
+  if (diarized.status === 'rejected') console.log(`[telephonie] écoute avec interlocuteurs indisponible : ${diarized.reason?.message}`)
+  if (prompted.status === 'rejected') console.log(`[telephonie] ${TRANSCRIPTION_MODEL} indisponible : ${prompted.reason?.message}`)
+  const segments = diarized.status === 'fulfilled' ? (diarized.value.segments ?? []) : []
+  // « A : … » / « B : … », une réplique par ligne (répliques voisines regroupées).
+  const turns = []
+  for (const seg of segments) {
+    const text = String(seg.text ?? '').trim()
+    if (!text) continue
+    const last = turns[turns.length - 1]
+    if (last && last.speaker === seg.speaker) last.text += ` ${text}`
+    else turns.push({ speaker: seg.speaker, text })
+  }
+  const speakers = turns.length ? turns.map((t) => `${t.speaker} : ${t.text}`).join('\n') : null
+  const text = prompted.status === 'fulfilled' ? prompted.value.text?.trim() || null : null
+  if (speakers || text) return { main: speakers ?? text, alt: speakers && text ? text : null }
+  const whisper = await openai.audio.transcriptions.create({
+    file: file(),
+    model: 'whisper-1',
+    language: 'fr',
+    prompt: TRANSCRIPTION_CONTEXT,
+  })
+  return { main: whisper.text, alt: null }
+}
+
 // Lancée en tâche de fond par la synchro des appels (jamais attendue par
 // une requête HTTP). Les deux comptes (OVH, OpenAI) sont indépendants : sans
 // clé OpenAI l'enregistrement reste écoutable mais sans texte, et la
@@ -63,30 +104,12 @@ async function transcribe(callId, recordingUrl, openaiApiKey) {
       throw e
     })
 
-    const openai = new OpenAI({ apiKey: openaiApiKey })
-    const file = () => new File([audio.buffer], `appel.${audio.extension}`, { type: audio.contentType })
-    let transcription
-    try {
-      // Modèle de transcription récent, bien plus juste que Whisper sur les
-      // noms propres, les adresses et les chiffres ; le contexte l'aide à
-      // reconnaître le vocabulaire du métier.
-      transcription = await openai.audio.transcriptions.create({
-        file: file(),
-        model: TRANSCRIPTION_MODEL,
-        language: 'fr',
-        prompt: TRANSCRIPTION_CONTEXT,
-      })
-    } catch (e) {
-      console.log(`[telephonie] ${TRANSCRIPTION_MODEL} indisponible (${e.message}), repli sur whisper-1`)
-      transcription = await openai.audio.transcriptions.create({
-        file: file(),
-        model: 'whisper-1',
-        language: 'fr',
-        prompt: TRANSCRIPTION_CONTEXT,
-      })
-    }
-
-    db.prepare("UPDATE calls SET transcription = ?, transcription_status = 'ok' WHERE id = ?").run(transcription.text, callId)
+    const heard = await listen(new OpenAI({ apiKey: openaiApiKey }), audio)
+    db.prepare("UPDATE calls SET transcription = ?, transcription_alt = ?, transcription_status = 'ok' WHERE id = ?").run(
+      heard.main,
+      heard.alt,
+      callId,
+    )
     if (call) broadcast('call_update', { id: callId }, call.team_id)
   } catch (e) {
     console.log(`[telephonie] transcription échouée pour l'appel ${callId} : ${e.message}`)

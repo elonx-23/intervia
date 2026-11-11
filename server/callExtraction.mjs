@@ -70,6 +70,8 @@ const EXTRACTION_SCHEMA = {
 
 const SYSTEM_PROMPT = `Tu es l'assistant de prise d'appel d'une entreprise de dépannage à domicile (serrurerie, électricité, plomberie) en Île-de-France. Tu reçois la transcription automatique d'un appel entrant et tu remplis la fiche d'intervention. Une fiche fausse envoie le technicien à la mauvaise adresse : sois rigoureux, relis toute la transcription avant de répondre, et vérifie chaque champ.
 
+Tu peux recevoir deux écoutes du même appel : l'une sépare les interlocuteurs (A, B…), l'autre est souvent plus juste sur l'orthographe. Croise-les.
+
 La transcription vient d'une reconnaissance vocale : elle contient des fautes (noms de rues, noms propres, chiffres). Corrige les erreurs évidentes de transcription (ex. « rue de vos girard » → « rue de Vaugirard », « boulevard Voltère » → « boulevard Voltaire ») mais n'invente jamais une information absente.
 
 Le client se corrige souvent en cours d'appel, et le standard répète parfois les informations : garde TOUJOURS la dernière version confirmée par le client.
@@ -94,7 +96,7 @@ Le client se corrige souvent en cours d'appel, et le standard répète parfois l
 - description : le problème en une ou deux phrases claires, à la troisième personne.
 - announced_price : prix annoncé au client pendant l'appel, en euros (nombre seul) ; pour une fourchette, le montant le plus bas ; sinon null.
 
-6) to_verify : liste courte (0 à 4 éléments) des informations douteuses que le patron doit vérifier avant d'envoyer le technicien : orthographe incertaine d'un nom, chiffre mal compris, adresse incomplète, contradiction dans l'appel. Ne signale PAS ce qui sera vérifié automatiquement ensuite (code postal manquant, nom complet de la commune, format du téléphone). Liste vide si tout est clair.`
+6) to_verify : liste courte (0 à 4 éléments) des informations douteuses (elles seront retranchées par une relecture) : orthographe incertaine d'un nom, chiffre mal compris, adresse incomplète, contradiction dans l'appel. Ne signale PAS ce qui sera vérifié automatiquement ensuite (code postal manquant, nom complet de la commune, format du téléphone). Liste vide si tout est clair.`
 
 const parseExtraction = (completion) => JSON.parse(completion.choices[0].message.content)
 
@@ -136,9 +138,15 @@ export async function createInterventionFromCall({ callId, transcription, openai
   if (!call || call.direction !== 'inbound' || !transcription?.trim()) return null
   db.prepare('UPDATE calls SET analyzed_at = ? WHERE id = ?').run(now(), callId)
 
+  // Les deux écoutes du même appel (voir transcription.mjs), croisées par l'IA.
+  const listening = call.transcription_alt
+    ? `Écoute 1 (interlocuteurs séparés : A, B…) :\n${transcription}\n\nÉcoute 2 (même appel, autre transcription, souvent plus juste sur l'orthographe des noms, rues et codes) :\n${call.transcription_alt}`
+    : transcription
+
+  const openai = new OpenAI({ apiKey: openaiApiKey })
   let extracted
   try {
-    extracted = await extractFromTranscription(new OpenAI({ apiKey: openaiApiKey }), transcription)
+    extracted = await extractFromTranscription(openai, listening)
   } catch (e) {
     console.log(`[telephonie] analyse de l'appel ${callId} échouée : ${e.message}`)
     // Réessayée au passage suivant (ex. crédit de transcription épuisé).
@@ -151,58 +159,136 @@ export async function createInterventionFromCall({ callId, transcription, openai
     broadcast('call_update', { id: callId }, call.team_id)
   }
   if (!extracted?.dispatch_confirmed || call.intervention_id) return null
-  return insertInterventionFromExtraction(call, await finalizeExtraction(call, extracted))
+  return insertInterventionFromExtraction(call, await finalizeExtraction(call, extracted, { openai, listening }))
 }
 
-// Contrôle et mise en forme de ce que l'IA a compris, avant d'écrire la
-// fiche : téléphone au format 06 12 34 56 78, nom et prénom bien écrits,
-// adresse confirmée par la Base Adresse Nationale (code postal et ville
-// toujours remplis), étage et codes propres. Ce qui reste douteux est listé
-// sur la fiche, à vérifier avant d'envoyer le technicien.
-export async function finalizeExtraction(call, extracted) {
-  const notes = [...(extracted.to_verify ?? [])].map((n) => String(n).trim()).filter(Boolean)
+// Contrôle qualité : l'IA relit la fiche proposée en la comparant à l'appel
+// et à la base nationale des adresses, et renvoie la fiche finale corrigée.
+// Aucun humain ne valide ensuite : c'est elle qui tranche les doutes.
+const REVIEW_FIELDS = [
+  'first_name',
+  'last_name',
+  'callback_phone',
+  'address',
+  'postal_code',
+  'city',
+  'floor',
+  'access_codes',
+  'trade',
+  'description',
+  'announced_price',
+]
+const REVIEW_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: [...REVIEW_FIELDS, 'corrections'],
+  properties: {
+    ...Object.fromEntries(REVIEW_FIELDS.map((k) => [k, EXTRACTION_SCHEMA.properties[k]])),
+    corrections: { type: 'array', items: { type: 'string' } },
+  },
+}
 
-  // Téléphone : le vrai numéro appelant (fiable) ; un autre numéro dicté par
-  // le client est signalé, ou pris s'il n'y a pas de numéro appelant.
+const REVIEW_PROMPT = `Tu es le contrôle qualité de la prise d'appel d'une entreprise de dépannage à domicile en Île-de-France. Aucun humain ne relira la fiche : le technicien partira directement avec. Compare la fiche proposée à l'appel (une ou deux écoutes de la même conversation) et aux résultats de la base nationale des adresses, puis renvoie la fiche finale, corrigée.
+
+Méthode : pour chaque champ, retrouve dans l'appel ce que le CLIENT a dit en dernier (pas le standardiste), et corrige la fiche si elle s'en écarte. Quand les deux écoutes diffèrent, choisis la version la plus cohérente avec le reste de l'appel.
+- first_name / last_name : ceux du client (jamais ceux du standardiste ou de l'entreprise), pas inversés ; orthographe épelée s'il y en a une ; « Monsieur X » / « Madame X » = nom de famille seulement.
+- callback_phone : numéro dicté par le client pour le rappeler (10 chiffres), sinon null.
+- address / postal_code / city : la base nationale fait foi pour l'orthographe de la voie, le code postal et la ville. Si elle indique que le numéro existe dans un autre code postal, garde l'adresse qui existe, sauf si l'appel montre clairement un autre numéro (chiffre mal entendu).
+- floor, access_codes : étage, porte, digicode, interphone, bâtiment, escalier — rien d'oublié, rien de déformé, rien d'inventé. Garde TOUJOURS le libellé de chaque code, caractères collés : « Digicode 4512B · Interphone Martin ».
+- trade, description, announced_price : conformes à l'appel.
+- Les points incertains signalés : tranche-les toi-même en choisissant la version la plus probable d'après l'appel.
+- N'invente jamais : une information qui n'a pas été dite reste null.
+- corrections : liste courte de ce que tu as corrigé par rapport à la fiche proposée (vide si rien).`
+
+async function reviewFiche(openai, listening, fiche, place, doubts) {
+  const completion = await openai.chat.completions.create({
+    model: INTAKE_MODEL,
+    reasoning_effort: 'high',
+    response_format: { type: 'json_schema', json_schema: { name: 'fiche_finale', strict: true, schema: REVIEW_SCHEMA } },
+    messages: [
+      { role: 'system', content: REVIEW_PROMPT },
+      {
+        role: 'user',
+        content: JSON.stringify(
+          {
+            appel: listening,
+            fiche_proposee: Object.fromEntries(REVIEW_FIELDS.map((k) => [k, fiche[k] ?? null])),
+            base_nationale_des_adresses: { adresse_confirmee: place.verified, remarques: place.notes },
+            points_incertains: doubts,
+          },
+          null,
+          1,
+        ),
+      },
+    ],
+  })
+  return JSON.parse(completion.choices[0].message.content)
+}
+
+const sameAddress = (a, b) =>
+  ['address', 'postal_code', 'city'].every(
+    (k) =>
+      String(a[k] ?? '')
+        .trim()
+        .toLowerCase() ===
+      String(b[k] ?? '')
+        .trim()
+        .toLowerCase(),
+  )
+
+// Fiche finale, sans validation humaine :
+// 1. adresse vérifiée dans la Base Adresse Nationale (code postal et ville
+//    toujours remplis ; numéro trouvé ailleurs → l'adresse réelle) ;
+// 2. relecture par l'IA (contrôle qualité) avec l'appel et la vérification
+//    d'adresse : elle corrige et tranche les doutes ;
+// 3. adresse revérifiée si la relecture l'a changée ;
+// 4. téléphone 06 12 34 56 78 (numéro dicté, sinon numéro appelant), nom,
+//    prénom, étage et codes mis en forme.
+// `notes` garde la trace des corrections automatiques (journal interne).
+export async function finalizeExtraction(call, extracted, { openai, listening } = {}) {
+  const log = []
+  const companyCp = companyForTeam(call.team_id).address?.match(/\b(\d{2})\d{3}\b/)?.[1]
+  const departments = !companyCp || IDF_DEPARTMENTS.includes(companyCp) ? IDF_DEPARTMENTS : [companyCp]
+  const check = (f) => checkAddress({ address: f.address, postal_code: f.postal_code, city: f.city }, { departments })
+
+  let place = await check(extracted)
+  log.push(...place.notes)
+  let fiche = { ...extracted, address: place.address, postal_code: place.postal_code, city: place.city }
+
+  if (openai && listening) {
+    try {
+      const reviewed = await reviewFiche(openai, listening, fiche, place, extracted.to_verify ?? [])
+      log.push(...(reviewed.corrections ?? []).map((c) => `Relecture : ${c}`))
+      const next = { ...fiche, ...Object.fromEntries(REVIEW_FIELDS.map((k) => [k, reviewed[k]])) }
+      if (!sameAddress(next, fiche)) {
+        place = await check(next)
+        log.push(...place.notes)
+      }
+      fiche = { ...next, address: place.address, postal_code: place.postal_code, city: place.city }
+    } catch (e) {
+      console.log(`[telephonie] relecture de la fiche indisponible (${e.message}) : fiche gardée telle quelle`)
+    }
+  }
+
   // Téléphone : le numéro où le client veut être rappelé s'il l'a dicté
   // (10 chiffres valides), sinon le vrai numéro appelant.
   const caller = formatFrenchPhone(toFrenchNational(call.from_number))
-  const dictated = extracted.callback_phone ? formatFrenchPhone(extracted.callback_phone) : null
+  const dictated = fiche.callback_phone ? formatFrenchPhone(fiche.callback_phone) : null
   let phone = isValidFrenchPhone(caller) ? caller : null
   if (dictated && isValidFrenchPhone(dictated)) {
-    if (phone && phoneKey(dictated) !== phoneKey(phone)) notes.push(`Appel reçu d'un autre numéro : ${phone}.`)
+    if (phone && phoneKey(dictated) !== phoneKey(phone)) log.push(`Numéro dicté retenu (appel reçu du ${phone}).`)
     phone = dictated
-  } else if (extracted.callback_phone) {
-    notes.push(`Numéro dicté incomplet ou mal compris (« ${extracted.callback_phone} ») : à vérifier.`)
   }
   if (!phone) phone = caller // numéro masqué ou étranger : tel quel
 
-  // Zone de l'entreprise (d'après son adresse) pour les communes du même nom.
-  const companyCp = companyForTeam(call.team_id).address?.match(/\b(\d{2})\d{3}\b/)?.[1]
-  const departments = !companyCp || IDF_DEPARTMENTS.includes(companyCp) ? IDF_DEPARTMENTS : [companyCp]
-  const place = await checkAddress(
-    { address: extracted.address, postal_code: extracted.postal_code, city: extracted.city },
-    { departments },
-  )
-  // Adresse confirmée par la base nationale : les doutes de l'IA sur la ville
-  // ou le code postal n'ont plus lieu d'être.
-  if (place.verified) {
-    for (let k = notes.length - 1; k >= 0; k--) if (/\b(ville|commune|code postal|arrondissement)\b/i.test(notes[k])) notes.splice(k, 1)
-  }
-  notes.push(...place.notes)
-  if (!extracted.last_name && !extracted.first_name) notes.push("Nom du client non donné pendant l'appel.")
-
   return {
-    ...extracted,
-    first_name: formatPersonName(extracted.first_name),
-    last_name: formatPersonName(extracted.last_name),
+    ...fiche,
+    first_name: formatPersonName(fiche.first_name),
+    last_name: formatPersonName(fiche.last_name),
     phone,
-    address: place.address,
-    postal_code: place.postal_code,
-    city: place.city,
-    floor: formatFloor(extracted.floor),
-    access_codes: formatAccessCodes(extracted.access_codes),
-    notes: [...new Set(notes)].slice(0, 8),
+    floor: formatFloor(fiche.floor),
+    access_codes: formatAccessCodes(fiche.access_codes),
+    notes: [...new Set(log)].slice(0, 12),
   }
 }
 

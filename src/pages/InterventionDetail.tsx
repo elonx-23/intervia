@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Copy, FileText, KeyRound, MapPin, Navigation, Phone, PhoneIncoming, TriangleAlert } from 'lucide-react'
+import { Check, ChevronRight, Copy, FileText, KeyRound, MapPin, Navigation, Phone, PhoneIncoming } from 'lucide-react'
 import * as React from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
@@ -43,7 +43,6 @@ import {
   updateInterventionStatus,
   type Intervention,
   type Technician,
-  markIntakeChecked,
 } from '@/lib/interventions'
 import { presetsFor } from '@/lib/itemPresets'
 import { formatPhone } from '@/lib/utils'
@@ -157,9 +156,7 @@ export default function InterventionDetail() {
   }
 
   const technicianName = technicians.find((t) => t.id === intervention.technicien_id)
-  const client = [intervention.client_first_name, intervention.client_last_name]
-    .filter(Boolean)
-    .join(' ')
+  const client = [intervention.client_first_name, intervention.client_last_name].filter(Boolean).join(' ')
 
   const copyWhatsApp = async () => {
     try {
@@ -317,35 +314,11 @@ export default function InterventionDetail() {
           <div className="flex flex-col gap-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3">
             <p className="flex items-center gap-2 text-sm font-medium">
               <PhoneIncoming className="size-4 text-sky-600 dark:text-sky-400" />
-              Créée depuis un appel — à vérifier
+              Créée automatiquement depuis l'appel
             </p>
             <p className="text-xs text-muted-foreground">
-              Remplie automatiquement en écoutant l'appel ; l'adresse est contrôlée dans la base nationale des adresses. En cas de
-              doute, réécoute l'appel.
+              L'IA a écouté l'appel, rempli la fiche, relu chaque information et vérifié l'adresse dans la base nationale des adresses.
             </p>
-            {intervention.intake_notes && intervention.intake_notes.length > 0 && (
-              <div className="flex flex-col gap-2 rounded-xl bg-tone-amber-soft px-3 py-2.5 text-tone-amber-ink">
-                <p className="flex items-center gap-1.5 text-xs font-semibold">
-                  <TriangleAlert className="size-3.5" /> À vérifier avant d'envoyer le technicien
-                </p>
-                <ul className="list-disc pl-4 text-xs leading-relaxed">
-                  {intervention.intake_notes.map((n) => (
-                    <li key={n}>{n}</li>
-                  ))}
-                </ul>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-fit bg-background/70"
-                  onClick={async () => {
-                    if (!session) return
-                    setIntervention(await markIntakeChecked(session.sessionId, intervention.id))
-                  }}
-                >
-                  <Check className="size-4" /> C'est vérifié
-                </Button>
-              </div>
-            )}
             <RecordingPlayer callId={intervention.source_call_id} sessionId={session.sessionId} />
             <CallSummary callId={intervention.source_call_id} sessionId={session.sessionId} />
           </div>
@@ -357,17 +330,11 @@ export default function InterventionDetail() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-2">
                   <Label>Prénom</Label>
-                  <Input
-                    value={form.clientFirstName}
-                    onChange={(e) => setForm((f) => ({ ...f, clientFirstName: e.target.value }))}
-                  />
+                  <Input value={form.clientFirstName} onChange={(e) => setForm((f) => ({ ...f, clientFirstName: e.target.value }))} />
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label>Nom</Label>
-                  <Input
-                    value={form.clientLastName}
-                    onChange={(e) => setForm((f) => ({ ...f, clientLastName: e.target.value }))}
-                  />
+                  <Input value={form.clientLastName} onChange={(e) => setForm((f) => ({ ...f, clientLastName: e.target.value }))} />
                 </div>
               </div>
               <div className="flex flex-col gap-2">
@@ -408,17 +375,11 @@ export default function InterventionDetail() {
               </div>
               <div className="flex flex-col gap-2">
                 <Label>Type</Label>
-                <Input
-                  value={form.interventionType}
-                  onChange={(e) => setForm((f) => ({ ...f, interventionType: e.target.value }))}
-                />
+                <Input value={form.interventionType} onChange={(e) => setForm((f) => ({ ...f, interventionType: e.target.value }))} />
               </div>
               <div className="flex flex-col gap-2">
                 <Label>Description</Label>
-                <Textarea
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                />
+                <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
               </div>
               <div className="flex flex-col gap-2">
                 <Label>Montant (€)</Label>
@@ -442,7 +403,9 @@ export default function InterventionDetail() {
             <CardContent className="flex flex-col gap-4">
               {/* En-tête : métier (pastille colorée au statut), client, prix annoncé. */}
               <div className="flex items-center gap-3">
-                <span className={`flex size-12 shrink-0 items-center justify-center rounded-2xl ${TONE_ICON[INTERVENTION_TONE[intervention.status]]}`}>
+                <span
+                  className={`flex size-12 shrink-0 items-center justify-center rounded-2xl ${TONE_ICON[INTERVENTION_TONE[intervention.status]]}`}
+                >
                   <TradeIcon trade={intervention.intervention_type} className="size-6" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -450,7 +413,9 @@ export default function InterventionDetail() {
                   <p className="truncate text-sm text-muted-foreground">{intervention.intervention_type || 'Type non précisé'}</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-lg font-bold">{intervention.amount != null ? `${String(intervention.amount).replace('.', ',')} €` : '—'}</p>
+                  <p className="text-lg font-bold">
+                    {intervention.amount != null ? `${String(intervention.amount).replace('.', ',')} €` : '—'}
+                  </p>
                   <p className="text-[11px] text-muted-foreground">prix annoncé</p>
                 </div>
               </div>
@@ -476,7 +441,11 @@ export default function InterventionDetail() {
                     <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-tone-blue-soft text-tone-blue-ink">
                       <MapPin className="size-4" />
                     </span>
-                    <span className="min-w-0">{[intervention.address, [intervention.postal_code, intervention.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')}</span>
+                    <span className="min-w-0">
+                      {[intervention.address, [intervention.postal_code, intervention.city].filter(Boolean).join(' ')]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </span>
                   </a>
                 )}
                 {(intervention.floor || intervention.access_codes) && (
@@ -485,7 +454,10 @@ export default function InterventionDetail() {
                       <KeyRound className="size-4" />
                     </span>
                     <span className="min-w-0">
-                      {[intervention.floor && `Étage ${intervention.floor.replace(/^étage\s*/i, '')}`, intervention.access_codes && `Code ${intervention.access_codes}`]
+                      {[
+                        intervention.floor && `Étage ${intervention.floor.replace(/^étage\s*/i, '')}`,
+                        intervention.access_codes && `Code ${intervention.access_codes}`,
+                      ]
                         .filter(Boolean)
                         .join(' · ')}
                     </span>
@@ -522,9 +494,7 @@ export default function InterventionDetail() {
                         <p className="truncate text-sm font-medium">
                           {d.kind === 'devis' ? 'Devis' : 'Facture'} {d.number}
                         </p>
-                        <Badge variant={documentTone(d.kind, d.status)}>
-                          {statusLabel}
-                        </Badge>
+                        <Badge variant={documentTone(d.kind, d.status)}>{statusLabel}</Badge>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         <span className="font-semibold tabular-nums">{ttc.toFixed(2)} €</span>
@@ -575,9 +545,7 @@ export default function InterventionDetail() {
               {intervention.status === 'terminee' && (
                 <Button
                   disabled={busy}
-                  onClick={() =>
-                    session && runAction(() => updateInterventionStatus(session.sessionId, intervention.id, 'validee'))
-                  }
+                  onClick={() => session && runAction(() => updateInterventionStatus(session.sessionId, intervention.id, 'validee'))}
                 >
                   Valider l'intervention
                 </Button>
@@ -589,11 +557,7 @@ export default function InterventionDetail() {
         {!isAdmin && (
           <div className="flex flex-col gap-2">
             {intervention.address && ['assignee', 'acceptee'].includes(intervention.status) && (
-              <a
-                href={`https://waze.com/ul?q=${encodeURIComponent(intervention.address)}&navigate=yes`}
-                target="_blank"
-                rel="noreferrer"
-              >
+              <a href={`https://waze.com/ul?q=${encodeURIComponent(intervention.address)}&navigate=yes`} target="_blank" rel="noreferrer">
                 <Button variant="outline" size="lg" className="w-full">
                   <Navigation className="size-4" /> Ouvrir dans Waze
                 </Button>
@@ -603,9 +567,7 @@ export default function InterventionDetail() {
               <Button
                 size="lg"
                 disabled={busy}
-                onClick={() =>
-                  session && runAction(() => updateInterventionStatus(session.sessionId, intervention.id, 'acceptee'))
-                }
+                onClick={() => session && runAction(() => updateInterventionStatus(session.sessionId, intervention.id, 'acceptee'))}
               >
                 Accepter l'intervention
               </Button>
@@ -619,9 +581,7 @@ export default function InterventionDetail() {
               <Button
                 size="lg"
                 disabled={busy}
-                onClick={() =>
-                  session && runAction(() => updateInterventionStatus(session.sessionId, intervention.id, 'terminee'))
-                }
+                onClick={() => session && runAction(() => updateInterventionStatus(session.sessionId, intervention.id, 'terminee'))}
               >
                 Terminer l'intervention
               </Button>

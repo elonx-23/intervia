@@ -71,6 +71,8 @@ export function formatAccessCodes(raw) {
   return s
     ? s
         .split(' · ')
+        // Un code seul (« 1937 », « 4512B ») est précisé comme tel.
+        .map((part) => (/^[0-9A-Z]{3,8}$/.test(part) && /\d/.test(part) ? `Code ${part}` : part))
         .map((part) => part.charAt(0).toLocaleUpperCase('fr-FR') + part.slice(1))
         .join(' · ')
     : null
@@ -221,7 +223,7 @@ export async function checkAddress({ address, postal_code, city }, { departments
       const best = scored.find((c) => streetSimilarity(street, c.p.street || c.p.name) >= 0.6)
       const lookalike = scored[0] && scored[0] !== best && scored[0].score >= 0.6 ? scored[0].p : null
       if (!best && lookalike) {
-        notes.push(`Rue non trouvée dans la base des adresses : à vérifier (rue la plus proche : ${lookalike.label}).`)
+        notes.push(`Rue non trouvée dans la base des adresses (la plus proche : ${lookalike.label}) : gardée telle que dite.`)
       }
       if (best && best.score >= 0.6) {
         const p = best.p
@@ -246,17 +248,24 @@ export async function checkAddress({ address, postal_code, city }, { departments
                 (c.score ?? 0) >= 0.7,
             )
           }
-          notes.push(
-            elsewhere
-              ? `Le ${elsewhere.name} se trouve dans le ${elsewhere.postcode} ${elsewhere.city}, pas dans le ${p.postcode} dit par le client : vérifier le numéro ou l'arrondissement.`
-              : number
-                ? `Numéro ${number} non confirmé dans la base des adresses : à vérifier.`
-                : 'Numéro de rue manquant : à demander au client.',
-          )
+          if (elsewhere) {
+            // Une adresse qui existe vaut mieux qu'une combinaison introuvable :
+            // c'est l'adresse réelle qui est retenue (la relecture par l'IA peut
+            // encore trancher autrement si l'appel montre un autre numéro).
+            result.address = elsewhere.name
+            result.postal_code = elsewhere.postcode
+            result.city = elsewhere.city
+            result.verified = true
+            notes.push(
+              `Le ${elsewhere.name} se trouve dans le ${elsewhere.postcode} ${elsewhere.city}, pas dans le ${p.postcode} dit par le client : adresse réelle retenue.`,
+            )
+          } else {
+            notes.push(number ? `Numéro ${number} non confirmé dans la base des adresses.` : 'Numéro de rue non donné.')
+          }
         }
         return result
       }
-      if (!lookalike) notes.push('Adresse non trouvée dans la base nationale des adresses : à vérifier (orthographe de la rue ?).')
+      if (!lookalike) notes.push('Adresse non trouvée dans la base nationale des adresses : gardée telle que dite.')
     }
     // Pas d'adresse confirmée : on complète au moins la ville et le code postal.
     if (cp || town) {
@@ -272,15 +281,15 @@ export async function checkAddress({ address, postal_code, city }, { departments
         if (!result.city || norm(result.city) !== norm(match.city)) result.city = match.city
         const others = [...new Set(ranked.filter((p) => inArea(p, departments) && p.city !== match.city).map((p) => p.city))]
         if (!cp && town && others.length && norm(town) !== norm(match.city)) {
-          notes.push(`Commune ambiguë : ${match.city} retenue (autres possibles : ${others.slice(0, 3).join(', ')}) — à vérifier.`)
+          notes.push(`Commune ambiguë : ${match.city} retenue (autres possibles : ${others.slice(0, 3).join(', ')}).`)
         }
       }
     }
   } catch (e) {
     console.log(`[adresse] vérification indisponible : ${e.message}`)
-    notes.push('Adresse non vérifiée automatiquement (service des adresses indisponible) : à contrôler.')
+    notes.push('Adresse non vérifiée (service des adresses indisponible).')
   }
-  if (!result.postal_code) notes.push('Code postal manquant : à demander au client.')
-  if (!result.city) notes.push('Ville manquante : à demander au client.')
+  if (!result.postal_code) notes.push('Code postal non donné.')
+  if (!result.city) notes.push('Ville non donnée.')
   return result
 }

@@ -207,15 +207,6 @@ interventionsRouter.patch('/:id', requireAdmin, (req, res) => {
 // Photos prises sur le terrain (avant/après réparation) — le technicien
 // assigné peut les ajouter, pas seulement l'admin, contrairement au reste de
 // la fiche (client, adresse…) qui reste en lecture seule pour lui.
-// Points relevés à la prise d'appel : le patron les a vérifiés.
-interventionsRouter.post('/:id/intake-checked', requireAdmin, (req, res) => {
-  const row = db.prepare('SELECT * FROM interventions WHERE id = ? AND team_id = ?').get(req.params.id, req.caller.team_id)
-  if (!row) return res.status(404).json({ error: 'Intervention introuvable' })
-  db.prepare('UPDATE interventions SET intake_notes = NULL WHERE id = ?').run(row.id)
-  broadcast('interventions_changed', { id: row.id }, row.team_id)
-  res.json(toApi(db.prepare('SELECT * FROM interventions WHERE id = ?').get(row.id)))
-})
-
 interventionsRouter.post('/:id/photos', (req, res) => {
   const { photos } = req.body ?? {}
   if (!Array.isArray(photos)) return res.status(400).json({ error: 'Photos invalides' })

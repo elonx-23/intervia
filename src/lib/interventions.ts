@@ -41,7 +41,7 @@ export interface Intervention {
   status: InterventionStatus
   technicien_id: string | null
   photos: string[]
-  // Points relevés à la prise d'appel par l'IA, à vérifier avant d'envoyer le technicien.
+  // Journal des corrections faites automatiquement à la prise d'appel (interne).
   intake_notes?: string[] | null
   reminder_count: number
   created_by: string | null
@@ -115,10 +115,6 @@ export async function updateInterventionStatus(
 
 export async function deleteIntervention(sessionId: string, id: string) {
   await apiFetch(`/api/interventions/${id}`, { method: 'DELETE', sessionId })
-}
-
-export async function markIntakeChecked(sessionId: string, id: string) {
-  return apiFetch<Intervention>(`/api/interventions/${id}/intake-checked`, { method: 'POST', sessionId })
 }
 
 export async function updateInterventionPhotos(sessionId: string, id: string, photos: string[]) {
