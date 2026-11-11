@@ -1,6 +1,6 @@
 import { Eye, EyeOff } from 'lucide-react'
 import * as React from 'react'
-import { Link, Navigate, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -8,10 +8,19 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/lib/auth'
 import { friendlyError } from '@/lib/errors'
-import { normalizeJoinCode, passwordError, rememberJoinCode, rememberedJoinCode, resendVerificationEmail, signup } from '@/lib/signup'
+import {
+  forgetJoinCode,
+  normalizeJoinCode,
+  passwordError,
+  rememberJoinCode,
+  rememberedJoinCode,
+  resendVerificationEmail,
+  signup,
+} from '@/lib/signup'
 
 export default function Inscription() {
-  const { session } = useAuth()
+  const { session, updateSession } = useAuth()
+  const navigate = useNavigate()
   const [params] = useSearchParams()
   // ?apercu=1 affiche directement l'écran "vérifie ta boîte mail" — pour
   // pouvoir le retravailler ensemble sans repasser tout le formulaire à
@@ -28,6 +37,7 @@ export default function Inscription() {
   const [loading, setLoading] = React.useState(false)
   const [sent, setSent] = React.useState(preview)
   const [resent, setResent] = React.useState(false)
+  const [alreadyExists, setAlreadyExists] = React.useState(false)
   // Lien d'invitation du patron (/inscription?code=XXXX) : le code est
   // appliqué tout seul à la confirmation de l'email.
   const [joinCode] = React.useState(() => normalizeJoinCode(params.get('code')) || rememberedJoinCode())
@@ -54,10 +64,20 @@ export default function Inscription() {
     if (!acceptCgv) return setError('Coche la case pour accepter les conditions d’utilisation et continuer.')
     setLoading(true)
     try {
-      await signup(email.trim(), password, firstName.trim(), lastName.trim(), joinCode)
+      const result = await signup(email.trim(), password, firstName.trim(), lastName.trim(), joinCode)
+      if (result.session) {
+        // Invité par son patron : déjà dans l'équipe, connecté.
+        forgetJoinCode()
+        updateSession(result.session)
+        navigate('/', { replace: true })
+        return
+      }
+      setResent(Boolean(result.resent))
       setSent(true)
     } catch (e) {
-      setError(friendlyError(e, "Erreur lors de l'inscription."))
+      const message = friendlyError(e, "Erreur lors de l'inscription.")
+      setAlreadyExists(/existe déjà/i.test(message))
+      setError(message)
     } finally {
       setLoading(false)
     }
@@ -83,7 +103,7 @@ export default function Inscription() {
           Pas reçu d'ici quelques minutes ? Regarde dans tes courriers indésirables (spams).
         </p>
         {resent ? (
-          <p className="text-xs text-muted-foreground">Email renvoyé.</p>
+          <p className="text-xs text-muted-foreground">Un nouveau lien de confirmation vient d'être envoyé.</p>
         ) : (
           <Button
             variant="ghost"
@@ -214,6 +234,16 @@ export default function Inscription() {
             </label>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
+            {alreadyExists && (
+              <div className="-mt-2 flex gap-2">
+                <Button asChild variant="outline" size="sm" className="flex-1">
+                  <Link to="/login">Se connecter</Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm" className="flex-1">
+                  <Link to="/mot-de-passe-oublie">Mot de passe oublié</Link>
+                </Button>
+              </div>
+            )}
             <Button type="submit" size="lg" disabled={loading}>
               {loading ? 'Création…' : 'Créer mon compte'}
             </Button>

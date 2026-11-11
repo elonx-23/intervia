@@ -6,6 +6,9 @@ import { sendMail } from '../mailer.mjs'
 import { rateLimit } from '../rateLimit.mjs'
 import { wrapEmail, ctaButton, fallbackLink } from '../emailTemplates.mjs'
 import { JoinError, joinTeamByCode, normalizeJoinCode } from '../teamJoin.mjs'
+import { sessionPayloadForUser } from '../auth.mjs'
+import { recordNewSession } from '../deviceSessions.mjs'
+import { SESSION_TTL_DAYS } from './auth.mjs'
 
 export const signupRouter = Router()
 
@@ -16,7 +19,9 @@ const RESET_TTL_HOURS = 2
 // limite, elles permettent soit de spammer la boîte mail de quelqu'un
 // (inscription/renvoi/mot de passe oublié répétés), soit de brute-forcer un
 // mot de passe par email connu.
-const emailActionLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 6 })
+// Par appareil : un patron qui inscrit ses techniciens depuis le même wifi
+// ne doit pas être bloqué au bout de quelques comptes.
+const emailActionLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20 })
 const passwordAttemptLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 15 })
 
 // L'adresse pour accéder à l'app change selon comment on y accède (réseau
@@ -57,7 +62,13 @@ async function sendVerificationEmail(req, userId, email) {
 
   const link = `${publicUrlFor(req)}/verifier-email/${token}`
   try {
-    await sendMail({ to: email, subject: 'Confirme ton email — Intervia', html: verificationHtml(link) })
+    await sendMail({
+      to: email,
+      subject: 'Confirme ton email — Intervia',
+      html: verificationHtml(link),
+      // Version texte : un email sans elle part plus souvent en indésirables.
+      text: `Bienvenue sur Intervia !\n\nConfirme ton adresse email pour activer ton compte : ${link}\n\nCe lien expire dans 24 h.`,
+    })
   } catch (e) {
     // Email non configuré en dev local : on ne bloque pas l'inscription,
     // le lien reste consultable dans les logs serveur pour continuer à tester.
@@ -67,7 +78,9 @@ async function sendVerificationEmail(req, userId, email) {
 
 signupRouter.post('/', emailActionLimiter, async (req, res) => {
   const { email, password, firstName, lastName, joinCode } = req.body ?? {}
-  const cleanEmail = String(email ?? '').trim().toLowerCase()
+  const cleanEmail = String(email ?? '')
+    .trim()
+    .toLowerCase()
 
   if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
     return res.status(400).json({ error: 'Adresse email invalide.' })
@@ -75,18 +88,56 @@ signupRouter.post('/', emailActionLimiter, async (req, res) => {
   const pwError = passwordError(password)
   if (pwError) return res.status(400).json({ error: pwError })
 
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(cleanEmail)
-  if (existing) return res.status(400).json({ error: 'Cet email est déjà utilisé.' })
-
-  // Inscription par le lien d'invitation du patron : le code d'équipe est
-  // gardé avec le compte et appliqué à la confirmation de l'email (même si
-  // le lien de confirmation s'ouvre dans une autre app que l'inscription).
+  // Code d'équipe du lien d'invitation du patron.
   const pendingJoinCode = normalizeJoinCode(joinCode) || null
-  const userId = uuid()
-  db.prepare(
-    `INSERT INTO users (id, email, password_hash, role, team_id, technicien_id, first_name, last_name, active, created_at, pending_join_code)
-     VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, 1, ?, ?)`,
-  ).run(userId, cleanEmail, hashPassword(password), firstName ?? null, lastName ?? null, now(), pendingJoinCode)
+  const existing = db.prepare('SELECT * FROM users WHERE email = ?').get(cleanEmail)
+  if (existing?.email_verified_at) {
+    return res
+      .status(400)
+      .json({ error: 'Un compte existe déjà avec cet email : connecte-toi (ou utilise « Mot de passe oublié »).', code: 'exists' })
+  }
+
+  let userId
+  if (existing) {
+    // Inscription refaite avant d'avoir confirmé l'email (email jamais reçu,
+    // faute corrigée…) : on met le compte à jour au lieu de bloquer.
+    userId = existing.id
+    db.prepare(
+      'UPDATE users SET password_hash = ?, first_name = ?, last_name = ?, pending_join_code = COALESCE(?, pending_join_code) WHERE id = ?',
+    ).run(hashPassword(password), firstName ?? null, lastName ?? null, pendingJoinCode, userId)
+  } else {
+    userId = uuid()
+    db.prepare(
+      `INSERT INTO users (id, email, password_hash, role, team_id, technicien_id, first_name, last_name, active, created_at, pending_join_code)
+       VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, 1, ?, ?)`,
+    ).run(userId, cleanEmail, hashPassword(password), firstName ?? null, lastName ?? null, now(), pendingJoinCode)
+  }
+
+  // Technicien invité par son patron (lien avec un code d'équipe valide) :
+  // pas d'email de confirmation à attendre, il entre tout de suite dans
+  // l'équipe, connecté. C'est le code de l'équipe qui donne l'accès.
+  if (pendingJoinCode) {
+    try {
+      const { user, team } = joinTeamByCode(db.prepare('SELECT * FROM users WHERE id = ?').get(userId), pendingJoinCode)
+      db.prepare('UPDATE users SET email_verified_at = COALESCE(email_verified_at, ?) WHERE id = ?').run(now(), userId)
+      const sessionId = uuid()
+      db.prepare('INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)').run(
+        sessionId,
+        userId,
+        new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+        now(),
+      )
+      recordNewSession(sessionId, user, req)
+      return res.json({
+        ok: true,
+        team: team.name,
+        session: sessionPayloadForUser(db.prepare('SELECT * FROM users WHERE id = ?').get(userId), sessionId),
+      })
+    } catch (e) {
+      if (!(e instanceof JoinError)) throw e
+      // Code refusé (faute, équipe complète) : parcours normal par email.
+    }
+  }
 
   // Ne jamais attendre l'envoi ici — un SMTP lent ou temporairement
   // injoignable (déjà vu depuis un serveur distant, cf. Gmail qui peut
@@ -96,7 +147,7 @@ signupRouter.post('/', emailActionLimiter, async (req, res) => {
   // déjà son propre try/catch qui journalise l'échec sans jamais lever.
   sendVerificationEmail(req, userId, cleanEmail)
 
-  res.json({ ok: true })
+  res.json({ ok: true, resent: Boolean(existing) })
 })
 
 // Renvoie un lien de vérification frais — utile si le premier email a été
@@ -104,7 +155,9 @@ signupRouter.post('/', emailActionLimiter, async (req, res) => {
 // avant le correctif ci-dessus). Réponse identique que le compte existe ou
 // non, pour ne pas laisser deviner quels emails sont déjà inscrits.
 signupRouter.post('/resend', emailActionLimiter, async (req, res) => {
-  const cleanEmail = String(req.body?.email ?? '').trim().toLowerCase()
+  const cleanEmail = String(req.body?.email ?? '')
+    .trim()
+    .toLowerCase()
   const user = db.prepare('SELECT id, email_verified_at FROM users WHERE email = ?').get(cleanEmail)
   if (user && !user.email_verified_at) {
     sendVerificationEmail(req, user.id, cleanEmail)
@@ -135,7 +188,10 @@ signupRouter.get('/verify/:token', (req, res) => {
       return res.json({ ok: true, joinError: e.message })
     }
   }
-  res.json({ ok: true, team: user?.role === 'technicien' ? (db.prepare('SELECT name FROM teams WHERE id = ?').get(user.team_id)?.name ?? null) : null })
+  res.json({
+    ok: true,
+    team: user?.role === 'technicien' ? (db.prepare('SELECT name FROM teams WHERE id = ?').get(user.team_id)?.name ?? null) : null,
+  })
 })
 
 function resetPasswordHtml(link) {
@@ -152,7 +208,9 @@ function resetPasswordHtml(link) {
 // Réponse identique que le compte existe ou non, pour ne pas laisser
 // deviner quels emails sont inscrits.
 signupRouter.post('/forgot-password', emailActionLimiter, async (req, res) => {
-  const cleanEmail = String(req.body?.email ?? '').trim().toLowerCase()
+  const cleanEmail = String(req.body?.email ?? '')
+    .trim()
+    .toLowerCase()
   const user = db.prepare('SELECT id FROM users WHERE email = ?').get(cleanEmail)
 
   if (user) {
@@ -169,8 +227,8 @@ signupRouter.post('/forgot-password', emailActionLimiter, async (req, res) => {
     const link = `${publicUrlFor(req)}/reinitialiser-mot-de-passe/${token}`
     // Même raison qu'à l'inscription (voir sendVerificationEmail) : ne
     // jamais laisser un SMTP lent bloquer la réponse HTTP.
-    sendMail({ to: cleanEmail, subject: 'Réinitialise ton mot de passe — Intervia', html: resetPasswordHtml(link) }).catch(
-      (e) => console.log(`[signup] email de réinitialisation non envoyé (${e.message}) — lien : ${link}`),
+    sendMail({ to: cleanEmail, subject: 'Réinitialise ton mot de passe — Intervia', html: resetPasswordHtml(link) }).catch((e) =>
+      console.log(`[signup] email de réinitialisation non envoyé (${e.message}) — lien : ${link}`),
     )
   }
 

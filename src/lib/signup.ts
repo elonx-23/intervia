@@ -1,7 +1,10 @@
 import { apiFetch } from '@/lib/api'
+import type { PseSession } from '@/lib/auth'
 
+// session : technicien invité (code d'équipe valide), connecté tout de suite.
+// resent : inscription refaite avant confirmation, nouveau lien envoyé.
 export function signup(email: string, password: string, firstName: string, lastName: string, joinCode?: string | null) {
-  return apiFetch<{ ok: true }>('/api/signup', {
+  return apiFetch<{ ok: true; team?: string; session?: PseSession; resent?: boolean }>('/api/signup', {
     method: 'POST',
     body: { email, password, firstName, lastName, joinCode: joinCode || undefined },
   })

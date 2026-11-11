@@ -55,7 +55,7 @@ export function isMailerConfigured() {
 // (no-reply@intervia.info, seule signée DKIM) ne change jamais, seul le nom
 // affiché avant le "<...>" change, exactement comme MAIL_FROM le fait déjà
 // pour "Intervia" par défaut.
-export async function sendMail({ to, subject, html, attachments, fromName }) {
+export async function sendMail({ to, subject, html, text, attachments, fromName }) {
   const t = getTransporter()
   if (!t) {
     throw new Error(
@@ -64,5 +64,5 @@ export async function sendMail({ to, subject, html, attachments, fromName }) {
   }
   const defaultFrom = process.env.MAIL_FROM ?? process.env.SMTP_USER
   const from = fromName ? `"${fromName.replace(/"/g, "'")}" <${process.env.SMTP_USER}>` : defaultFrom
-  await t.sendMail({ from, to, subject, html, attachments })
+  await t.sendMail({ from, to, subject, html, text, attachments })
 }
