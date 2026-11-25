@@ -110,6 +110,7 @@ async function transcribe(callId, recordingUrl, openaiApiKey) {
       heard.alt,
       callId,
     )
+    console.log(`[telephonie] appel ${callId} transcrit`)
     if (call) broadcast('call_update', { id: callId }, call.team_id)
   } catch (e) {
     console.log(`[telephonie] transcription échouée pour l'appel ${callId} : ${e.message}`)

@@ -20,9 +20,15 @@ const MAX_NEW_PER_RUN = 50
 // Transcriptions lancées en même temps au maximum par passage.
 const MAX_TRANSCRIPTIONS_PER_RUN = 3
 
+// Appels dont la transcription a échoué (ex. crédit OpenAI épuisé) : nouvelle
+// tentative toutes les 15 minutes, pour qu'ils repartent seuls dès que le
+// crédit revient, sans attendre un redémarrage du serveur.
+const ERROR_RETRY_MS = 15 * 60 * 1000
+
 const states = new Map()
 const running = new Set()
 let recoveredAfterRestart = false
+let lastErrorRetryAt = 0
 
 export function getSyncState(teamId) {
   return states.get(teamId) ?? { lastSyncAt: null, lastError: null }
@@ -137,14 +143,17 @@ function startPendingTranscriptions(teamId) {
     // sur « en cours » : on le remet en file d'attente (aucune transcription
     // ne peut tourner juste après un démarrage).
     db.prepare("UPDATE calls SET transcription_status = NULL WHERE transcription_status = 'en_attente'").run()
-    // Échecs des 3 derniers jours (ex. crédit de transcription épuisé à ce
-    // moment-là) : une nouvelle tentative à chaque redémarrage.
+    recoveredAfterRestart = true
+  }
+  // Échecs des 3 derniers jours : remis en file d'attente au démarrage, puis
+  // toutes les 15 minutes (un échec sans crédit n'est pas facturé).
+  if (Date.now() - lastErrorRetryAt >= ERROR_RETRY_MS) {
+    lastErrorRetryAt = Date.now()
     db.prepare(
       `UPDATE calls SET transcription_status = NULL
        WHERE transcription_status = 'erreur' AND transcription IS NULL AND recording_url IS NOT NULL
          AND started_at > datetime('now', '-3 days')`,
     ).run()
-    recoveredAfterRestart = true
   }
   const { openaiApiKey } = getTelephonyConfig(teamId)
   if (!openaiApiKey) return

@@ -13,6 +13,7 @@ import {
   formatPersonName,
   isValidFrenchPhone,
   phoneKey,
+  streetSimilarity,
 } from './contactCheck.mjs'
 import { toFrenchNational } from './phone.mjs'
 import { nextReference } from './routes/interventions.mjs'
@@ -158,8 +159,50 @@ export async function createInterventionFromCall({ callId, transcription, openai
     db.prepare('UPDATE calls SET summary = ? WHERE id = ?').run(formatSummary(extracted.summary), callId)
     broadcast('call_update', { id: callId }, call.team_id)
   }
-  if (!extracted?.dispatch_confirmed || call.intervention_id) return null
-  return insertInterventionFromExtraction(call, await finalizeExtraction(call, extracted, { openai, listening }))
+  if (call.intervention_id) return null
+  if (!extracted?.dispatch_confirmed) {
+    console.log(`[telephonie] appel ${callId} résumé, sans envoi de technicien convenu : pas de fiche`)
+    return null
+  }
+  const fiche = await finalizeExtraction(call, extracted, { openai, listening })
+  // Le client a déjà sa fiche (faite à la main pendant une panne de l'IA, ou il
+  // rappelle pour la même intervention) : l'appel y est rattaché, sans doublon.
+  const existing = existingFicheForCall(call, fiche)
+  if (existing) {
+    db.prepare('UPDATE calls SET intervention_id = ? WHERE id = ?').run(existing.id, callId)
+    console.log(`[telephonie] appel ${callId} rattaché à la fiche ${existing.reference} déjà ouverte pour ce client : pas de doublon`)
+    broadcast('call_update', { id: callId }, call.team_id)
+    return null
+  }
+  return insertInterventionFromExtraction(call, fiche)
+}
+
+// Statuts d'une intervention pas encore terminée.
+const OPEN_STATUSES = new Set(['en_attente', 'assignee', 'acceptee', 'en_cours'])
+
+/**
+ * Fiche déjà existante pour ce client (même numéro et même rue) : créée depuis
+ * le début de l'appel (à la main, pendant que l'IA était indisponible), ou
+ * encore ouverte après un appel des 12 heures précédentes (le client rappelle).
+ */
+export function existingFicheForCall(call, fiche) {
+  const phones = new Set([fiche.phone, toFrenchNational(call.from_number)].map(phoneKey).filter((k) => k.length === 9))
+  if (!phones.size || !fiche.address) return null
+  const callStart = new Date(call.started_at || now()).getTime()
+  const candidates = db
+    .prepare(
+      'SELECT id, reference, phone, address, postal_code, status, created_at FROM interventions WHERE team_id = ? AND created_at >= ? ORDER BY created_at DESC',
+    )
+    .all(call.team_id, new Date(callStart - 12 * 3600_000).toISOString())
+  return (
+    candidates.find(
+      (i) =>
+        phones.has(phoneKey(i.phone)) &&
+        streetSimilarity(i.address, fiche.address) >= 0.8 &&
+        (!i.postal_code || !fiche.postal_code || i.postal_code === fiche.postal_code) &&
+        (new Date(i.created_at).getTime() >= callStart - 5 * 60_000 || OPEN_STATUSES.has(i.status)),
+    ) ?? null
+  )
 }
 
 // Contrôle qualité : l'IA relit la fiche proposée en la comparant à l'appel
@@ -328,15 +371,22 @@ export function insertInterventionFromExtraction(call, extracted) {
 
   const who = [extracted.first_name, extracted.last_name].filter(Boolean).join(' ') || toFrenchNational(call.from_number) || 'Un client'
   const where = extracted.city ? ` à ${extracted.city}` : ''
+  // Appel traité en différé (ex. reprise après une panne de l'IA) : l'heure de l'appel est précisée.
+  const callTime = new Date(call.started_at || now())
+  const late =
+    Date.now() - callTime.getTime() > 30 * 60_000
+      ? ` (appel du ${callTime.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })})`
+      : ''
   notifyAdmin(
     call.team_id,
     'fiche_depuis_appel',
     '📞 Nouvelle intervention à envoyer',
     trade
-      ? `${who} a appelé pour un dépannage en ${trade.toLowerCase()}${where}. La fiche ${reference} est prête.`
-      : `${who} a appelé pour un dépannage${where}. La fiche ${reference} est prête.`,
+      ? `${who} a appelé pour un dépannage en ${trade.toLowerCase()}${where}. La fiche ${reference} est prête${late}.`
+      : `${who} a appelé pour un dépannage${where}. La fiche ${reference} est prête${late}.`,
     { intervention_id: id },
   )
+  console.log(`[telephonie] fiche ${reference} créée depuis l'appel ${call.id}`)
   broadcast('interventions_changed', {}, call.team_id)
   broadcast('call_update', { id: call.id }, call.team_id)
   return id
