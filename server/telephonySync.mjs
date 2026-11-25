@@ -117,6 +117,9 @@ export async function syncTeamCalls(teamId) {
       errors.push(errorForScreen(e))
       console.log(`[telephonie] relève des appels échouée (équipe ${teamId}) : ${e.message}`)
     }
+    // Les transcriptions partent tout de suite : la configuration des numéros
+    // (plus lente, parfois en erreur chez l'opérateur) ne doit pas les retarder.
+    startPendingTranscriptions(teamId)
     try {
       const overview = await syncNumbers(teamId, c)
       await syncOrders(teamId, c, overview)
@@ -130,8 +133,6 @@ export async function syncTeamCalls(teamId) {
     states.set(teamId, state)
     running.delete(teamId)
   }
-
-  startPendingTranscriptions(teamId)
   return { imported, error: state.lastError }
 }
 
@@ -149,11 +150,14 @@ function startPendingTranscriptions(teamId) {
   // toutes les 15 minutes (un échec sans crédit n'est pas facturé).
   if (Date.now() - lastErrorRetryAt >= ERROR_RETRY_MS) {
     lastErrorRetryAt = Date.now()
-    db.prepare(
-      `UPDATE calls SET transcription_status = NULL
-       WHERE transcription_status = 'erreur' AND transcription IS NULL AND recording_url IS NOT NULL
-         AND started_at > datetime('now', '-3 days')`,
-    ).run()
+    const { changes } = db
+      .prepare(
+        `UPDATE calls SET transcription_status = NULL
+         WHERE transcription_status = 'erreur' AND transcription IS NULL AND recording_url IS NOT NULL
+           AND started_at > datetime('now', '-3 days')`,
+      )
+      .run()
+    if (changes) console.log(`[telephonie] ${changes} appel(s) en échec remis en file d'attente`)
   }
   const { openaiApiKey } = getTelephonyConfig(teamId)
   if (!openaiApiKey) return
@@ -165,6 +169,7 @@ function startPendingTranscriptions(teamId) {
        ORDER BY started_at DESC LIMIT ?`,
     )
     .all(teamId, MAX_TRANSCRIPTIONS_PER_RUN)
+  if (pending.length) console.log(`[telephonie] transcription lancée pour ${pending.length} appel(s) (équipe ${teamId})`)
   for (const call of pending) {
     transcribeCallRecording({ callId: call.id, recordingUrl: call.recording_url, openaiApiKey }).catch(() => {})
   }
@@ -185,7 +190,24 @@ function startPendingTranscriptions(teamId) {
 
 export async function syncAllTeams() {
   const rows = db.prepare("SELECT key FROM settings WHERE key LIKE '%:telephony'").all()
+  const synced = new Set()
   for (const { key } of rows) {
-    await syncTeamCalls(key.slice(0, -':telephony'.length)).catch(() => {})
+    const teamId = key.slice(0, -':telephony'.length)
+    synced.add(teamId)
+    await syncTeamCalls(teamId).catch(() => {})
+  }
+  // Appels arrivés par un autre canal (notifications de l'opérateur…) pour une
+  // équipe sans réglages de téléphonie : leurs transcriptions en attente ou en
+  // échec, et leurs fiches, sont reprises de la même façon.
+  const others = db
+    .prepare(
+      `SELECT DISTINCT team_id FROM calls
+       WHERE team_id IS NOT NULL AND direction = 'inbound' AND recording_url IS NOT NULL
+         AND ((transcription IS NULL AND (transcription_status IS NULL OR transcription_status = 'erreur'))
+           OR (transcription IS NOT NULL AND analyzed_at IS NULL))`,
+    )
+    .all()
+  for (const { team_id: teamId } of others) {
+    if (!synced.has(teamId)) startPendingTranscriptions(teamId)
   }
 }
